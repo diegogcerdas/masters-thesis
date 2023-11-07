@@ -27,13 +27,15 @@ class BrainDiVEModule(pl.LightningModule):
         self.weight_decay = weight_decay
         self.num_voxels = num_voxels
 
+        # TODO: Add support for other embeddings + multiple embeddings
         self.clip, _, _ = open_clip.create_model_and_transforms(
             "ViT-B-16", pretrained="laion2b_s34b_b88k"
         )
         self.clip.requires_grad_(False)
-        self.linear = nn.Linear(512, num_voxels)
+        # TODO: Add support for other encoders
+        self.encoder = nn.Linear(512, num_voxels)
         if init_diffuser:
-            self.diffuser = None
+            self.diffuser = None  # TODO: Implement image synthesis
 
         self.train_r2 = R2Score()
         self.val_r2 = R2Score()
@@ -41,7 +43,7 @@ class BrainDiVEModule(pl.LightningModule):
     def forward(self, x):
         with torch.no_grad():
             x = self.clip.encode_image(x)
-        x = self.linear(x)
+        x = self.encoder(x)
         return x
 
     # TODO: LR Scheduler

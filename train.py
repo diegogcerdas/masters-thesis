@@ -28,8 +28,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--weight-decay", type=float, default=2e-2)
-    parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--num-workers", type=int, default=8)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--num-workers", type=int, default=18)
     parser.add_argument("--max-epochs", type=int, default=100)
     parser.add_argument(
         "--device",
