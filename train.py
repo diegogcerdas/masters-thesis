@@ -1,21 +1,23 @@
 import argparse
 import os
-import torch
+
 import pytorch_lightning as pl
-from torch.utils import data
+import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
-from dataset import NaturalScenesDataset
-from model import BrainEncoderModule
+from torch.utils import data
 
+from dataset import NaturalScenesDataset
+from model import BrainDiVEModule
 from utils import config_from_args
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    # TODO: Data Parameters
-
-    # TODO: Model Parameters
+    # Model and Data Parameters
+    parser.add_argument("--subject", type=int, default=1)
+    parser.add_argument("--roi", type=str, default="OFA")
+    parser.add_argument("--hemisphere", type=str, default="left")
 
     # Training Parameters
     parser.add_argument("--data-dir", type=str, default="./data/")
@@ -26,8 +28,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument("--weight-decay", type=float, default=2e-2)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--num-workers", type=int, default=18)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--num-workers", type=int, default=8)
     parser.add_argument("--max-epochs", type=int, default=100)
     parser.add_argument(
         "--device",
@@ -41,7 +43,16 @@ if __name__ == "__main__":
 
     pl.seed_everything(cfg.seed)
 
-    train_set = NaturalScenesDataset()
+    dataset = NaturalScenesDataset(
+        root=cfg.data_dir,
+        subject=cfg.subject,
+        partition="train",
+        roi=cfg.roi,
+        hemisphere=cfg.hemisphere,
+    )
+    train_size = int(0.95 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_set, val_set = data.random_split(dataset, [train_size, val_size])
     train_loader = data.DataLoader(
         train_set,
         batch_size=cfg.batch_size,
@@ -50,8 +61,6 @@ if __name__ == "__main__":
         shuffle=True,
         pin_memory=True,
     )
-
-    val_set = NaturalScenesDataset()
     val_loader = data.DataLoader(
         val_set,
         batch_size=cfg.batch_size,
@@ -62,16 +71,23 @@ if __name__ == "__main__":
 
     if cfg.resume_ckpt is not None:
         print(f"Resuming from checkpoint {cfg.resume_ckpt}")
-        model = BrainEncoderModule.load_from_checkpoint(cfg.resume_ckpt)
+        model = BrainDiVEModule.load_from_checkpoint(cfg.resume_ckpt)
+        assert model.subject == cfg.subject
+        assert model.roi == cfg.roi
     else:
-        model = BrainEncoderModule(
-            learning_rate=cfg.learning_rate, 
-            weight_decay=cfg.weight_decay
+        model = BrainDiVEModule(
+            subject=cfg.subject,
+            roi=cfg.roi,
+            hemisphere=cfg.hemisphere,
+            num_voxels=dataset.num_voxels,
+            learning_rate=cfg.learning_rate,
+            weight_decay=cfg.weight_decay,
         )
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=f"{cfg.ckpt_dir}/{cfg.exp_name}",
         save_top_k=1,
+        save_last=True,
         monitor="val_loss",
         mode="min",
     )
@@ -88,7 +104,7 @@ if __name__ == "__main__":
         logger=logger,
         callbacks=callbacks,
         num_sanity_val_steps=2,
-        log_every_n_steps=1
+        log_every_n_steps=1,
     )
 
     trainer.fit(model, train_loader, val_loader, ckpt_path=cfg.resume_ckpt)

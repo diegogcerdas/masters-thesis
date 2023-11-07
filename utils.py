@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 @dataclass
 class ConfigTrain:
+    subject: int
+    roi: str
+    hemisphere: str
     data_dir: str
     ckpt_dir: str
     logs_dir: str
@@ -16,6 +19,7 @@ class ConfigTrain:
     num_workers: int
     max_epochs: int
     device: str
+
 
 def config_from_args(args, mode="train"):
     if mode == "train":
