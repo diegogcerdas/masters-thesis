@@ -1,10 +1,11 @@
-import open_clip
 import pytorch_lightning as pl
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.optim.lr_scheduler import ExponentialLR
 from torcheval.metrics import R2Score
+
+from encoder import create_encoder
+from feature_extractor import create_feature_extractor
 
 
 class BrainDiVEModule(pl.LightningModule):
@@ -14,9 +15,13 @@ class BrainDiVEModule(pl.LightningModule):
         roi: str,
         hemisphere: str,
         num_voxels: int,
+        feature_extractor_type: str,
+        encoder_type: str,
         learning_rate: float,
         weight_decay: float,
-        init_diffuser: bool = False,
+        lr_gamma: float,
+        init_generative: bool = False,
+        generator_type: str = None,
     ):
         super(BrainDiVEModule, self).__init__()
         self.save_hyperparameters()
@@ -25,33 +30,32 @@ class BrainDiVEModule(pl.LightningModule):
         self.hemisphere = hemisphere
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.lr_gamma = lr_gamma
         self.num_voxels = num_voxels
+        self.feature_extractor_type = feature_extractor_type
+        self.encoder_type = encoder_type
 
-        # TODO: Add support for other embeddings + multiple embeddings
-        self.clip, _, _ = open_clip.create_model_and_transforms(
-            "ViT-B-16", pretrained="laion2b_s34b_b88k"
+        self.feature_extractor = create_feature_extractor(feature_extractor_type)
+        self.encoder = create_encoder(
+            encoder_type, self.feature_extractor.feature_size(), num_voxels
         )
-        self.clip.requires_grad_(False)
-        # TODO: Add support for other encoders
-        self.encoder = nn.Linear(512, num_voxels)
-        if init_diffuser:
+        if init_generative:
             self.diffuser = None  # TODO: Implement image synthesis
 
         self.train_r2 = R2Score()
         self.val_r2 = R2Score()
 
     def forward(self, x):
-        with torch.no_grad():
-            x = self.clip.encode_image(x)
+        x = self.feature_extractor.extract_features(x)
         x = self.encoder(x)
         return x
 
-    # TODO: LR Scheduler
     def configure_optimizers(self):
         optimizer = optim.Adam(
             self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
         )
-        return optimizer
+        scheduler = ExponentialLR(optimizer, gamma=self.lr_gamma)
+        return [optimizer], [scheduler]
 
     def compute_loss(self, batch, mode):
         img, activation = batch

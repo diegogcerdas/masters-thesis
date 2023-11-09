@@ -1,5 +1,6 @@
 import argparse
 import os
+from typing import List, Union
 
 import pytorch_lightning as pl
 import torch
@@ -16,8 +17,10 @@ if __name__ == "__main__":
 
     # Model and Data Parameters
     parser.add_argument("--subject", type=int, default=1)
-    parser.add_argument("--roi", type=str, default="OFA")
+    parser.add_argument("--roi", type=Union[str, List[str]], default="floc-faces")
     parser.add_argument("--hemisphere", type=str, default="left")
+    parser.add_argument("--feature-extractor-type", type=str, default="clip")
+    parser.add_argument("--encoder-type", type=str, default="linear")
 
     # Training Parameters
     parser.add_argument("--data-dir", type=str, default="./data/")
@@ -26,7 +29,8 @@ if __name__ == "__main__":
     parser.add_argument("--exp-name", type=str, default="default-run")
     parser.add_argument("--resume-ckpt", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--lr-start", type=float, default=3e-4)
+    parser.add_argument("--lr-end", type=float, default=1.5e-4)
     parser.add_argument("--weight-decay", type=float, default=2e-2)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=18)
@@ -74,14 +78,18 @@ if __name__ == "__main__":
         model = BrainDiVEModule.load_from_checkpoint(cfg.resume_ckpt)
         assert model.subject == cfg.subject
         assert model.roi == cfg.roi
+        assert model.hemisphere == cfg.hemisphere
     else:
         model = BrainDiVEModule(
             subject=cfg.subject,
             roi=cfg.roi,
             hemisphere=cfg.hemisphere,
+            feature_extractor_type=cfg.feature_extractor_type,
+            encoder_type=cfg.encoder_type,
             num_voxels=dataset.num_voxels,
-            learning_rate=cfg.learning_rate,
+            learning_rate=cfg.lr_start,
             weight_decay=cfg.weight_decay,
+            lr_gamma=(cfg.lr_end / cfg.lr_start) ** (1 / (cfg.max_epochs - 1)),
         )
 
     checkpoint_callback = ModelCheckpoint(
@@ -107,4 +115,5 @@ if __name__ == "__main__":
         log_every_n_steps=1,
     )
 
+    # TODO: implement cross-validation
     trainer.fit(model, train_loader, val_loader, ckpt_path=cfg.resume_ckpt)

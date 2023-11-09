@@ -7,13 +7,16 @@ class ConfigTrain:
     subject: int
     roi: str
     hemisphere: str
+    feature_extractor_type: str
+    encoder_type: str
     data_dir: str
     ckpt_dir: str
     logs_dir: str
     exp_name: str
     resume_ckpt: str
     seed: int
-    learning_rate: float
+    lr_start: float
+    lr_end: float
     weight_decay: float
     batch_size: int
     num_workers: int
