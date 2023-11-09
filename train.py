@@ -1,6 +1,5 @@
 import argparse
 import os
-from typing import List, Union
 
 import pytorch_lightning as pl
 import torch
@@ -8,16 +7,16 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from torch.utils import data
 
-from dataset import NaturalScenesDataset
-from model import BrainDiVEModule
-from utils import config_from_args
+from dataset.natural_scenes import NaturalScenesDataset
+from model.braindive import BrainDiVEModule
+from utils.train_utils import config_from_args
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Model and Data Parameters
     parser.add_argument("--subject", type=int, default=1)
-    parser.add_argument("--roi", type=Union[str, List[str]], default="floc-faces")
+    parser.add_argument("--roi", default="floc-faces")
     parser.add_argument("--hemisphere", type=str, default="left")
     parser.add_argument("--feature-extractor-type", type=str, default="clip")
     parser.add_argument("--encoder-type", type=str, default="linear")

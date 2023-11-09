@@ -4,8 +4,8 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 from torcheval.metrics import R2Score
 
-from encoder import create_encoder
-from feature_extractor import create_feature_extractor
+from model.encoder import create_encoder
+from model.feature_extractor import create_feature_extractor
 
 
 class BrainDiVEModule(pl.LightningModule):

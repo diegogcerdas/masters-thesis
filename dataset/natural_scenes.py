@@ -1,15 +1,14 @@
 import os
-import random
 from typing import List, Union
 
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as F
 import torchvision.transforms as transforms
-import torchvision.transforms.functional as TF
 from PIL import Image
 from torch.utils.data import Dataset
+
+from utils.dataset_utils import RandomSpatialOffset
 
 
 class NaturalScenesDataset(Dataset):
@@ -39,6 +38,7 @@ class NaturalScenesDataset(Dataset):
             self.fmri_data = self.load_fmri_data()
             self.num_voxels = self.fmri_data.shape[1]
 
+        # TODO: Move transform to feature extractor
         if partition == "train":
             self.transform = transforms.Compose(
                 [
@@ -179,25 +179,3 @@ class NaturalScenesDataset(Dataset):
             df = df.sort_values(by=["partition", "filename"])
             df.to_csv(data_info_path, index=False)
         return df
-
-
-class RandomSpatialOffset:
-    def __init__(self, offset, padding_mode="replicate"):
-        self.offset = offset
-        self.padding_mode = padding_mode
-
-    def __call__(self, img):
-        h, w = img.shape[1], img.shape[2]
-
-        dx = random.randint(-self.offset, self.offset)
-        dy = random.randint(-self.offset, self.offset)
-
-        # Perform edge value padding
-        left, top, right, bottom = max(0, dx), max(0, dy), max(0, -dx), max(0, -dy)
-        img = F.pad(img, (left, top, right, bottom), mode=self.padding_mode)
-
-        # Crop back to original size
-        left, top = max(0, -dx), max(0, -dy)
-        img = TF.crop(img, top, left, h, w)
-
-        return img
