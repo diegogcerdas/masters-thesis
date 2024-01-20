@@ -6,3 +6,8 @@ torchvision
 open_clip_torch
 nilearn==0.9.2
 torcheval
+diffusers 
+transformers 
+accelerate 
+scipy 
+safetensors
