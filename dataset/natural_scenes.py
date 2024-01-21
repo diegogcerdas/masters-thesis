@@ -4,11 +4,9 @@ from typing import List, Union
 import numpy as np
 import pandas as pd
 import torch
-import torchvision.transforms as transforms
 from PIL import Image
 from torch.utils.data import Dataset
-
-from utils.dataset_utils import RandomSpatialOffset
+from torchvision import transforms
 
 
 class NaturalScenesDataset(Dataset):
@@ -38,41 +36,12 @@ class NaturalScenesDataset(Dataset):
             self.fmri_data = self.load_fmri_data()
             self.num_voxels = self.fmri_data.shape[1]
 
-        # TODO: Move transform to feature extractor
-        if partition == "train":
-            self.transform = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Resize(224, antialias=True),
-                    transforms.Lambda(lambda x: x * np.random.uniform(0.95, 1.05)),
-                    transforms.Normalize(
-                        mean=(0.48145466, 0.4578275, 0.40821073),
-                        std=(0.26862954, 0.26130258, 0.27577711),
-                    ),
-                    RandomSpatialOffset(offset=4),
-                    transforms.Lambda(
-                        lambda x: x + (torch.randn(x.shape) * 0.05**2).to(x.device)
-                    ),
-                ]
-            )
-        else:
-            self.transform = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Resize(224, antialias=True),
-                    transforms.Normalize(
-                        mean=(0.48145466, 0.4578275, 0.40821073),
-                        std=(0.26862954, 0.26130258, 0.27577711),
-                    ),
-                ]
-            )
-
     def __len__(self):
         return self.df.shape[0]
 
     def __getitem__(self, idx):
         img = Image.open(self.df.iloc[idx]["filename"])
-        img = self.transform(img)
+        img = transforms.ToTensor()(img)
         if self.partition == "train":
             fmri = self.fmri_data[idx]
             return img, fmri

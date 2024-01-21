@@ -10,14 +10,14 @@ class RandomSpatialOffset:
         self.padding_mode = padding_mode
 
     def __call__(self, img):
-        h, w = img.shape[1], img.shape[2]
+        h, w = img.shape[-2], img.shape[-1]
 
         dx = random.randint(-self.offset, self.offset)
         dy = random.randint(-self.offset, self.offset)
 
         # Perform edge value padding
         left, top, right, bottom = max(0, dx), max(0, dy), max(0, -dx), max(0, -dy)
-        img = F.pad(img, (left, top, right, bottom), mode=self.padding_mode)
+        img = F.pad(img, (left, right, top, bottom), mode=self.padding_mode)
 
         # Crop back to original size
         left, top = max(0, -dx), max(0, -dy)
