@@ -24,7 +24,7 @@ class ConfigTrain:
     device: str
 
 
-def config_from_args(args, mode="train"):
+def config_from_args(args: dict, mode: str = "train"):
     if mode == "train":
         class_name = ConfigTrain
     else:

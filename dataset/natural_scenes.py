@@ -19,16 +19,16 @@ class NaturalScenesDataset(Dataset):
         hemisphere: str = None,
     ):
         super().__init__()
-        assert partition in ["train", "test"]
+        assert partition in ["train", "test", "debug_train", "debug_test"]
         # TODO: Add support for multiple subjects
         assert subject in range(1, 9)
-        assert partition == "test" or ((roi is not None) and (hemisphere is not None))
+        assert partition != "train" or ((roi is not None) and (hemisphere is not None))
         self.root = root
         self.subject = subject
         self.partition = partition
 
         self.df = self.build_image_info_df()
-        self.df = self.df[self.df.partition == partition]
+        self.df = self.df[self.df.partition == partition.replace("debug_", "")]
 
         if partition == "train":
             self.rois, self.roi_classes = self.parse_roi(roi)
@@ -40,12 +40,13 @@ class NaturalScenesDataset(Dataset):
         return self.df.shape[0]
 
     def __getitem__(self, idx):
-        img = Image.open(self.df.iloc[idx]["filename"])
+        coco_id = self.df.iloc[idx]["coco_id"]
+        img = Image.open(os.path.join(self.root, self.df.iloc[idx]["filename"]))
         img = transforms.ToTensor()(img)
         if self.partition == "train":
             fmri = self.fmri_data[idx]
-            return img, fmri
-        return img
+            return img, fmri, coco_id
+        return img, coco_id
 
     def load_fmri_data(self):
         subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
@@ -68,6 +69,7 @@ class NaturalScenesDataset(Dataset):
             roi_mapping = list(roi_map.keys())[list(roi_map.values()).index(roi_)]
             fmri_mask += np.asarray(roi_class_npy == roi_mapping, dtype=int)
         fmri = fmri[:, np.where(fmri_mask)[0]]
+        fmri = (fmri - fmri.mean()) / fmri.std()
         return torch.from_numpy(fmri).float()
 
     def parse_roi(self, roi):
@@ -138,13 +140,15 @@ class NaturalScenesDataset(Dataset):
             data = []
             training_dir = os.path.join(subj_dir, "training_split", "training_images")
             for filename in os.listdir(training_dir):
-                filename = os.path.join(training_dir, filename)
-                data.append([filename, "train"])
+                coco_id = int(filename.split("_")[1].split(".")[0][-5:])
+                filename = os.path.join(training_dir.replace(self.root, ''), filename)
+                data.append([filename, "train", coco_id])
             testing_dir = os.path.join(subj_dir, "test_split", "test_images")
             for filename in os.listdir(testing_dir):
-                filename = os.path.join(testing_dir, filename)
-                data.append([filename, "test"])
-            df = pd.DataFrame(data, columns=["filename", "partition"])
+                coco_id = int(filename.split("_")[1].split(".")[0][-5:])
+                filename = os.path.join(testing_dir.replace(self.root, ''), filename)
+                data.append([filename, "test", coco_id])
+            df = pd.DataFrame(data, columns=["filename", "partition", "coco_id"])
             df = df.sort_values(by=["partition", "filename"])
             df.to_csv(data_info_path, index=False)
         return df

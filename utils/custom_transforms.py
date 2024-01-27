@@ -5,7 +5,7 @@ import torchvision.transforms.functional as TF
 
 
 class RandomSpatialOffset:
-    def __init__(self, offset, padding_mode="replicate"):
+    def __init__(self, offset: int, padding_mode: str = "replicate"):
         self.offset = offset
         self.padding_mode = padding_mode
 

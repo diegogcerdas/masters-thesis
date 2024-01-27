@@ -9,7 +9,7 @@ from torch.utils import data
 
 from dataset.natural_scenes import NaturalScenesDataset
 from model.encoder.encoder_module import EncoderModule
-from utils.train_utils import config_from_args
+from utils.configs import config_from_args
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
