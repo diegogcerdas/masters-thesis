@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
@@ -6,7 +7,6 @@ from torcheval.metrics import R2Score
 
 from model.encoder.encoder import create_encoder
 from model.feature_extractor import create_feature_extractor
-import torch
 
 
 class EncoderModule(pl.LightningModule):
@@ -36,7 +36,7 @@ class EncoderModule(pl.LightningModule):
 
         self.feature_extractor = create_feature_extractor(feature_extractor_type)
         self.encoder = create_encoder(
-            encoder_type, self.feature_extractor.get_feature_size(), num_voxels
+            encoder_type, self.feature_extractor.feature_size, num_voxels
         )
 
         self.train_r2 = R2Score()
