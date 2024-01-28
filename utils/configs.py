@@ -19,6 +19,9 @@ class ConfigTrain:
     num_workers: int
     max_epochs: int
     device: str
+    wandb_project: str
+    wandb_entity: str
+    wandb_mode: str
 
 
 def config_from_args(args: dict, mode: str = "train"):
