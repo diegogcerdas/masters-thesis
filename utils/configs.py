@@ -14,7 +14,8 @@ class ConfigTrain:
     logs_dir: str
     exp_name: str
     seed: int
-    learning_rate: float
+    lr_start: float
+    lr_end: float
     batch_size: int
     num_workers: int
     max_epochs: int

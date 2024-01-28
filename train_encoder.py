@@ -30,10 +30,11 @@ if __name__ == "__main__":
     parser.add_argument("--logs-dir", type=str, default="./logs/")
     parser.add_argument("--exp-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--lr-start", type=float, default=1e-1)
+    parser.add_argument("--lr-end", type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=18)
-    parser.add_argument("--max-epochs", type=int, default=10)
+    parser.add_argument("--max-epochs", type=int, default=100)
     parser.add_argument(
         "--device",
         type=str,
@@ -88,7 +89,8 @@ if __name__ == "__main__":
         num_voxels=dataset.num_voxels,
         feature_extractor_type=cfg.feature_extractor_type,
         encoder_type=cfg.encoder_type,
-        learning_rate=cfg.learning_rate,
+        learning_rate=cfg.lr_start,
+        lr_gamma=(cfg.lr_end / cfg.lr_start) ** (1 / (cfg.max_epochs - 1)),
     )
 
     checkpoint_callback = ModelCheckpoint(
@@ -99,7 +101,6 @@ if __name__ == "__main__":
         mode="min",
     )
     os.makedirs(f"{cfg.ckpt_dir}/{cfg.exp_name}", exist_ok=True)
-    callbacks = [checkpoint_callback]
 
     csv_logger = CSVLogger(cfg.logs_dir, name=cfg.exp_name, flush_logs_every_n_steps=1)
 
@@ -112,6 +113,7 @@ if __name__ == "__main__":
     wandb_logger = WandbLogger()
 
     logger = [wandb_logger, csv_logger]
+    callbacks = [checkpoint_callback]
 
     trainer = pl.Trainer(
         accelerator="gpu" if str(cfg.device).startswith("cuda") else "cpu",

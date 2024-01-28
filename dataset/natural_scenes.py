@@ -33,7 +33,7 @@ class NaturalScenesDataset(Dataset):
             self.rois, self.roi_classes = self.parse_roi(roi)
             self.hemisphere = hemisphere
             self.fmri_data = self.load_fmri_data()
-            self.num_voxels = self.fmri_data.shape[1]
+            self.num_voxels = 1
 
     def __len__(self):
         return self.df.shape[0]
@@ -68,6 +68,7 @@ class NaturalScenesDataset(Dataset):
             roi_mapping = list(roi_map.keys())[list(roi_map.values()).index(roi_)]
             fmri_mask += np.asarray(roi_class_npy == roi_mapping, dtype=int)
         fmri = fmri[:, np.where(fmri_mask)[0]]
+        fmri = fmri.mean(-1)
         fmri = (fmri - fmri.mean()) / fmri.std()
         return torch.from_numpy(fmri).float()
 
