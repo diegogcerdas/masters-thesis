@@ -122,4 +122,4 @@ if __name__ == "__main__":
         callbacks=callbacks,
     )
 
-    trainer.fit(model, train_loader, val_loader, ckpt_path=cfg.resume_ckpt)
+    trainer.fit(model, train_loader, val_loader)
