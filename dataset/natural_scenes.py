@@ -20,7 +20,6 @@ class NaturalScenesDataset(Dataset):
     ):
         super().__init__()
         assert partition in ["train", "test", "debug_train", "debug_test"]
-        # TODO: Add support for multiple subjects
         assert subject in range(1, 9)
         assert partition != "train" or ((roi is not None) and (hemisphere is not None))
         self.root = root

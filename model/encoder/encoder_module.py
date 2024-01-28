@@ -19,8 +19,6 @@ class EncoderModule(pl.LightningModule):
         feature_extractor_type: str,
         encoder_type: str,
         learning_rate: float,
-        weight_decay: float,
-        lr_gamma: float,
     ):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters()
@@ -31,8 +29,6 @@ class EncoderModule(pl.LightningModule):
         self.feature_extractor_type = feature_extractor_type
         self.encoder_type = encoder_type
         self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
-        self.lr_gamma = lr_gamma
 
         self.feature_extractor = create_feature_extractor(feature_extractor_type)
         self.encoder = create_encoder(
@@ -49,11 +45,8 @@ class EncoderModule(pl.LightningModule):
         return x
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(
-            self.parameters(), lr=self.learning_rate, weight_decay=self.weight_decay
-        )
-        scheduler = ExponentialLR(optimizer, gamma=self.lr_gamma)
-        return [optimizer], [scheduler]
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
+        return optimizer
 
     def compute_loss(self, batch, mode):
         img, activation = batch

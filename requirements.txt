@@ -11,3 +11,4 @@ transformers
 accelerate 
 scipy 
 safetensors
+wandb

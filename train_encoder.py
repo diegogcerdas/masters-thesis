@@ -11,6 +11,9 @@ from dataset.natural_scenes import NaturalScenesDataset
 from model.encoder.encoder_module import EncoderModule
 from utils.configs import config_from_args
 
+import wandb
+from pytorch_lightning.loggers import WandbLogger
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -25,12 +28,9 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", type=str, default="./data/")
     parser.add_argument("--ckpt-dir", type=str, default="./checkpoints/")
     parser.add_argument("--logs-dir", type=str, default="./logs/")
-    parser.add_argument("--exp-name", type=str, default="default-run")
-    parser.add_argument("--resume-ckpt", type=str, default=None)
+    parser.add_argument("--exp-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--lr-start", type=float, default=3e-4)
-    parser.add_argument("--lr-end", type=float, default=1.5e-4)
-    parser.add_argument("--weight-decay", type=float, default=2e-2)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=18)
     parser.add_argument("--max-epochs", type=int, default=100)
@@ -41,10 +41,19 @@ if __name__ == "__main__":
             torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
         ),
     )
+
+    # WandB Parameters
+    parser.add_argument("--wandb-project", type=str, default="masters-thesis")
+    parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
+    parser.add_argument("--wandb-mode", type=str, default="online")
+
     args = parser.parse_args()
     cfg = config_from_args(args, mode="train")
+    pl.seed_everything(cfg.seed, workers=True)
 
-    pl.seed_everything(cfg.seed)
+    if cfg.exp_name is None:
+        roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
+        cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{cfg.feature_extractor_type}_{cfg.encoder_type}_{cfg.seed}"
 
     dataset = NaturalScenesDataset(
         root=cfg.data_dir,
@@ -53,43 +62,34 @@ if __name__ == "__main__":
         roi=cfg.roi,
         hemisphere=cfg.hemisphere,
     )
-    train_size = int(0.95 * len(dataset))
+    train_size = int(0.9 * len(dataset))
     val_size = len(dataset) - train_size
     train_set, val_set = data.random_split(dataset, [train_size, val_size])
     train_loader = data.DataLoader(
         train_set,
         batch_size=cfg.batch_size,
-        drop_last=False,
         num_workers=cfg.num_workers,
+        drop_last=False,
         shuffle=True,
         pin_memory=True,
     )
     val_loader = data.DataLoader(
         val_set,
         batch_size=cfg.batch_size,
-        drop_last=False,
         num_workers=cfg.num_workers,
+        drop_last=False,
         shuffle=False,
     )
 
-    if cfg.resume_ckpt is not None:
-        print(f"Resuming from checkpoint {cfg.resume_ckpt}")
-        model = EncoderModule.load_from_checkpoint(cfg.resume_ckpt)
-        assert model.subject == cfg.subject
-        assert model.roi == cfg.roi
-        assert model.hemisphere == cfg.hemisphere
-    else:
-        model = EncoderModule(
-            subject=cfg.subject,
-            roi=cfg.roi,
-            hemisphere=cfg.hemisphere,
-            num_voxels=dataset.num_voxels,
-            feature_extractor_type=cfg.feature_extractor_type,
-            encoder_type=cfg.encoder_type,
-            learning_rate=cfg.lr_start,
-            weight_decay=cfg.weight_decay,
-            lr_gamma=(cfg.lr_end / cfg.lr_start) ** (1 / (cfg.max_epochs - 1)),
-        )
+    model = EncoderModule(
+        subject=cfg.subject,
+        roi=cfg.roi,
+        hemisphere=cfg.hemisphere,
+        num_voxels=dataset.num_voxels,
+        feature_extractor_type=cfg.feature_extractor_type,
+        encoder_type=cfg.encoder_type,
+        learning_rate=cfg.learning_rate,
+    )
 
     checkpoint_callback = ModelCheckpoint(
         dirpath=f"{cfg.ckpt_dir}/{cfg.exp_name}",
@@ -102,17 +102,24 @@ if __name__ == "__main__":
     callbacks = [checkpoint_callback]
 
     csv_logger = CSVLogger(cfg.logs_dir, name=cfg.exp_name, flush_logs_every_n_steps=1)
-    logger = [csv_logger]
+
+    wandb.init(
+        name=cfg.exp_name,
+        project=cfg.wandb_project,
+        entity=cfg.wandb_entity,
+        mode=cfg.wandb_mode,
+    )
+    wandb_logger = WandbLogger()
+
+    logger = [wandb_logger, csv_logger]
 
     trainer = pl.Trainer(
         accelerator="gpu" if str(cfg.device).startswith("cuda") else "cpu",
+        deterministic=True,
         devices=1,
         max_epochs=cfg.max_epochs,
         logger=logger,
         callbacks=callbacks,
-        num_sanity_val_steps=2,
-        log_every_n_steps=1,
     )
 
-    # TODO: implement cross-validation
     trainer.fit(model, train_loader, val_loader, ckpt_path=cfg.resume_ckpt)
