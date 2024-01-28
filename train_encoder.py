@@ -33,7 +33,7 @@ if __name__ == "__main__":
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=18)
-    parser.add_argument("--max-epochs", type=int, default=100)
+    parser.add_argument("--max-epochs", type=int, default=10)
     parser.add_argument(
         "--device",
         type=str,

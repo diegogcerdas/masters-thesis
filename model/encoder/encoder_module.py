@@ -49,7 +49,7 @@ class EncoderModule(pl.LightningModule):
         return optimizer
 
     def compute_loss(self, batch, mode):
-        img, activation = batch
+        img, activation, _ = batch
         pred = self(img, mode)
         loss = F.mse_loss(pred, activation)
         if mode == "train":
