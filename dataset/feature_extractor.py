@@ -3,7 +3,6 @@ import abc
 import numpy as np
 import open_clip
 import torch
-from PIL import Image
 from torchvision import transforms
 
 from utils.custom_transforms import RandomSpatialOffset
@@ -25,7 +24,6 @@ class FeatureExtractor(abc.ABC, torch.nn.Module):
         super().__init__()
         self.device = device
         self.feature_size = ...
-        self.name = ...
 
     def extract_for_dataset(self, dataset: data.Dataset, batch_size: int):
         dataloader = data.DataLoader(
@@ -48,10 +46,11 @@ class FeatureExtractor(abc.ABC, torch.nn.Module):
 class CLIPExtractor(FeatureExtractor):
     def __init__(self, model_name: str, pretrained: str, device: str = None):
         super().__init__(device=device)
-        self.name = 'clip'
         self.clip, _, _ = open_clip.create_model_and_transforms(
             model_name=model_name, pretrained=pretrained
         )
+        if self.device is not None:
+            self.clip.to(self.device)
         self.clip.requires_grad_(False)
         self.feature_size = self.clip.visual.output_dim
 

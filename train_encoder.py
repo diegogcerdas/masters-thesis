@@ -19,10 +19,12 @@ if __name__ == "__main__":
 
     # Model and Data Parameters
     parser.add_argument("--subject", type=int, default=1)
-    parser.add_argument("--roi", default=["OFA"])
+    parser.add_argument("--roi", default="floc-faces")
     parser.add_argument("--hemisphere", type=str, default="left")
     parser.add_argument("--feature-extractor-type", type=str, default="clip")
     parser.add_argument("--encoder-type", type=str, default="linear")
+    parser.add_argument("--n-neighbors", type=int, default=0)
+    parser.add_argument("--distance-metric", type=str, default="cosine")
 
     # Training Parameters
     parser.add_argument("--data-dir", type=str, default="./data/")
@@ -30,10 +32,10 @@ if __name__ == "__main__":
     parser.add_argument("--logs-dir", type=str, default="./logs/")
     parser.add_argument("--exp-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--lr-start", type=float, default=1e-1)
+    parser.add_argument("--lr-start", type=float, default=1e-4)
     parser.add_argument("--lr-end", type=float, default=1e-4)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--num-workers", type=int, default=18)
+    parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--num-workers", type=int, default=8)
     parser.add_argument("--max-epochs", type=int, default=100)
     parser.add_argument(
         "--device",
@@ -62,10 +64,15 @@ if __name__ == "__main__":
         partition="train",
         roi=cfg.roi,
         hemisphere=cfg.hemisphere,
+        feature_extractor_type=cfg.feature_extractor_type,
+        n_neighbors=cfg.n_neighbors,
+        distance_metric=cfg.distance_metric,
+        device=cfg.device,
     )
     train_size = int(0.9 * len(dataset))
     val_size = len(dataset) - train_size
     train_set, val_set = data.random_split(dataset, [train_size, val_size])
+    val_set.dataset.split = "test"
     train_loader = data.DataLoader(
         train_set,
         batch_size=cfg.batch_size,
@@ -83,11 +90,8 @@ if __name__ == "__main__":
     )
 
     model = EncoderModule(
-        subject=cfg.subject,
-        roi=cfg.roi,
-        hemisphere=cfg.hemisphere,
-        num_voxels=dataset.num_voxels,
-        feature_extractor_type=cfg.feature_extractor_type,
+        input_size=dataset.input_size,
+        output_size=dataset.target_size,
         encoder_type=cfg.encoder_type,
         learning_rate=cfg.lr_start,
         lr_gamma=(cfg.lr_end / cfg.lr_start) ** (1 / (cfg.max_epochs - 1)),

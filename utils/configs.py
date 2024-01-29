@@ -9,6 +9,8 @@ class ConfigTrain:
     hemisphere: str
     feature_extractor_type: str
     encoder_type: str
+    n_neighbors: int
+    distance_metric: str
     data_dir: str
     ckpt_dir: str
     logs_dir: str
