@@ -57,8 +57,11 @@ class EncoderModule(pl.LightningModule):
 
     def plot_tsne(self, pred, target, low_dim, mode):
         f, axes = plt.subplots(1, 2, figsize=(10, 5))
-        axes[0].scatter(low_dim[:, 0], low_dim[:, 1], c=pred, cmap="RdBu_r")
-        axes[1].scatter(low_dim[:, 0], low_dim[:, 1], c=target, cmap="RdBu_r")
+        pred = pred.squeeze().detach().cpu().numpy()
+        target = target.squeeze().detach().cpu().numpy()
+        low_dim = low_dim.squeeze().detach().cpu().numpy()
+        axes[0].scatter(low_dim[:, 0], low_dim[:, 1], c=pred, cmap="RdBu_r", vmin=0, vmax=1)
+        axes[1].scatter(low_dim[:, 0], low_dim[:, 1], c=target, cmap="RdBu_r", vmin=0, vmax=1)
         axes[0].set_title("Prediction")
         axes[1].set_title("Target")
         axes[0].set_xticks([])
@@ -71,10 +74,12 @@ class EncoderModule(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss, pred, target, low_dim = self.compute_loss(batch, "train")
-        self.plot_tsne(pred, target, low_dim, "train")
+        if batch_idx == 0:
+            self.plot_tsne(pred, target, low_dim, "train")
         return loss
 
     def validation_step(self, batch, batch_idx):
         _, pred, target, low_dim = self.compute_loss(batch, "val")
-        self.plot_tsne(pred, target, low_dim, "val")
+        if batch_idx == 0:
+            self.plot_tsne(pred, target, low_dim, "val")
         return pred, target, low_dim

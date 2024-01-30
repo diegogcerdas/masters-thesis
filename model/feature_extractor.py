@@ -97,7 +97,7 @@ class CLIPExtractor(FeatureExtractor):
             x = self.test_transform(data)
         x = self.clip.encode_image(x)
         x = x / x.norm(dim=-1, keepdim=True)
-        return x
+        return x.float()
 
 
 def create_feature_extractor(

@@ -40,7 +40,7 @@ class NSDInducedDataset(data.Dataset):
     def __getitem__(self, idx):
         img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
         img = transforms.ToTensor()(img)
-        target = self.targets[idx]
+        target = self.targets[idx].astype(np.float32)
         low_dim = self.low_dim[idx]
         return img, target, low_dim
 
