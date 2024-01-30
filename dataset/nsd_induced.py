@@ -41,6 +41,7 @@ class NSDInducedDataset(data.Dataset):
         folder = os.path.join(self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", 'features')
         f = os.path.join(folder, f'{self.feature_extractor_type}.npy')
         try:
+            print(f"Loading features from {f}")
             features = np.load(f)
         except:
             raise ValueError(f"Features not found at {f}. Please run the feature extractor first.")
@@ -51,7 +52,7 @@ class NSDInducedDataset(data.Dataset):
         f = os.path.join(folder, f'{self.feature_extractor_type}_{self.metric}_{self.n_neighbors}_{self.seed}_{self.nsd.hemisphere[0]}_{"_".join(sorted(self.nsd.rois))}.npy')
         if not os.path.exists(f):
             targets = []
-            for i in tqdm(range(len(self))):
+            for i in tqdm(range(len(self)), desc="Computing targets..."):
                 closest = np.argsort(distance_matrix[i, :])[:self.n_neighbors+1]
                 acts = []
                 for c in closest:

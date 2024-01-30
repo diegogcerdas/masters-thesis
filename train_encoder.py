@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
     if cfg.exp_name is None:
         roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
-        cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{cfg.feature_extractor_type}_{cfg.encoder_type}_{cfg.seed}"
+        cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{cfg.feature_extractor_type}_{cfg.encoder_type}_{cfg.n_neighbors}_{cfg.distance_metric}_{cfg.seed}"
 
     nsd = NaturalScenesDataset(
         root=cfg.data_dir,
@@ -69,7 +69,7 @@ if __name__ == "__main__":
     )
 
     feature_extractor = create_feature_extractor(cfg.feature_extractor_type, cfg.device)
-    f = folder = os.path.join(cfg.data_dir, f"subj{cfg.subject:02d}", "training_split", 'features', f'{cfg.feature_extractor_type}.npy')
+    f = os.path.join(cfg.data_dir, f"subj{cfg.subject:02d}", "training_split", 'features', f'{cfg.feature_extractor_type}.npy')
     _ = feature_extractor.extract_for_dataset(f, nsd)
 
     dataset = NSDInducedDataset(
@@ -101,6 +101,7 @@ if __name__ == "__main__":
     )
 
     model = EncoderModule(
+        feature_extractor=feature_extractor,
         input_size=feature_extractor.feature_size,
         output_size=dataset.target_size,
         encoder_type=cfg.encoder_type,

@@ -39,7 +39,7 @@ class FeatureExtractor(abc.ABC, torch.nn.Module):
                 shuffle=False,
             )
             features = []
-            for batch in tqdm(dataloader, total=len(dataloader)):
+            for batch in tqdm(dataloader, total=len(dataloader), desc="Extracting features..."):
                 x = batch[0]
                 x = x.to(self.device)
                 bs = x.shape[0]
