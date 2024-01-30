@@ -5,9 +5,8 @@ import numpy as np
 import pandas as pd
 import torch
 from PIL import Image
-from torchvision import transforms
-
 from torch.utils import data
+from torchvision import transforms
 
 
 class NaturalScenesDataset(data.Dataset):
@@ -143,12 +142,12 @@ class NaturalScenesDataset(data.Dataset):
             training_dir = os.path.join(subj_dir, "training_split", "training_images")
             for filename in os.listdir(training_dir):
                 coco_id = int(filename.split("_")[1].split(".")[0][-5:])
-                filename = os.path.join(training_dir.replace(self.root, ''), filename)
+                filename = os.path.join(training_dir.replace(self.root, ""), filename)
                 data.append([filename, "train", coco_id])
             testing_dir = os.path.join(subj_dir, "test_split", "test_images")
             for filename in os.listdir(testing_dir):
                 coco_id = int(filename.split("_")[1].split(".")[0][-5:])
-                filename = os.path.join(testing_dir.replace(self.root, ''), filename)
+                filename = os.path.join(testing_dir.replace(self.root, ""), filename)
                 data.append([filename, "test", coco_id])
             df = pd.DataFrame(data, columns=["filename", "partition", "coco_id"])
             df = df.sort_values(by=["partition", "filename"])

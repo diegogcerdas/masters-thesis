@@ -3,18 +3,16 @@ import os
 
 import pytorch_lightning as pl
 import torch
+import wandb
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.loggers import CSVLogger, WandbLogger
 from torch.utils import data
 
 from dataset.natural_scenes import NaturalScenesDataset
 from dataset.nsd_induced import NSDInducedDataset
 from model.encoder.encoder_module import EncoderModule
-from utils.configs import config_from_args
 from model.feature_extractor import create_feature_extractor
-
-import wandb
-from pytorch_lightning.loggers import WandbLogger
+from utils.configs import config_from_args
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -69,7 +67,13 @@ if __name__ == "__main__":
     )
 
     feature_extractor = create_feature_extractor(cfg.feature_extractor_type, cfg.device)
-    f = os.path.join(cfg.data_dir, f"subj{cfg.subject:02d}", "training_split", 'features', f'{cfg.feature_extractor_type}.npy')
+    f = os.path.join(
+        cfg.data_dir,
+        f"subj{cfg.subject:02d}",
+        "training_split",
+        "features",
+        f"{cfg.feature_extractor_type}.npy",
+    )
     _ = feature_extractor.extract_for_dataset(f, nsd)
 
     dataset = NSDInducedDataset(

@@ -1,11 +1,12 @@
+import matplotlib.pyplot as plt
 import pytorch_lightning as pl
+import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
+
 from model.encoder.encoder import create_encoder
-import matplotlib.pyplot as plt
 from model.feature_extractor import FeatureExtractor
-import torch
 
 
 class EncoderModule(pl.LightningModule):
@@ -16,10 +17,10 @@ class EncoderModule(pl.LightningModule):
         output_size: int,
         encoder_type: str,
         learning_rate: float,
-        lr_gamma: float
+        lr_gamma: float,
     ):
         super(EncoderModule, self).__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore="feature_extractor")
         self.feature_extractor = feature_extractor
         self.learning_rate = learning_rate
         self.lr_gamma = lr_gamma
@@ -33,9 +34,7 @@ class EncoderModule(pl.LightningModule):
         return x
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(
-            self.parameters(), lr=self.learning_rate
-        )
+        optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
         scheduler = ExponentialLR(optimizer, gamma=self.lr_gamma)
         return [optimizer], [scheduler]
 
@@ -57,7 +56,7 @@ class EncoderModule(pl.LightningModule):
         )
 
     def plot_tsne(self, pred, target, low_dim, mode):
-        f, axes = plt.subplots(1, 2, figsize=(10,5))
+        f, axes = plt.subplots(1, 2, figsize=(10, 5))
         axes[0].scatter(low_dim[:, 0], low_dim[:, 1], c=pred, cmap="RdBu_r")
         axes[1].scatter(low_dim[:, 0], low_dim[:, 1], c=target, cmap="RdBu_r")
         axes[0].set_title("Prediction")

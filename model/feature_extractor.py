@@ -1,16 +1,15 @@
 import abc
+import os
 
 import numpy as np
 import open_clip
 import torch
-from torchvision import transforms
-
-from utils.custom_transforms import RandomSpatialOffset
 from torch.utils import data
+from torchvision import transforms
 from tqdm import tqdm
-from dataset.natural_scenes import NaturalScenesDataset
 
-import os
+from dataset.natural_scenes import NaturalScenesDataset
+from utils.custom_transforms import RandomSpatialOffset
 
 
 # TODO: Add support for other embeddings
@@ -29,7 +28,9 @@ class FeatureExtractor(abc.ABC, torch.nn.Module):
         self.feature_size = ...
         self.name = ...
 
-    def extract_for_dataset(self, filename: str, dataset: NaturalScenesDataset, batch_size: int = 8):
+    def extract_for_dataset(
+        self, filename: str, dataset: NaturalScenesDataset, batch_size: int = 8
+    ):
         folder = os.path.dirname(filename)
         if not os.path.exists(filename):
             dataloader = data.DataLoader(
@@ -39,7 +40,9 @@ class FeatureExtractor(abc.ABC, torch.nn.Module):
                 shuffle=False,
             )
             features = []
-            for batch in tqdm(dataloader, total=len(dataloader), desc="Extracting features..."):
+            for batch in tqdm(
+                dataloader, total=len(dataloader), desc="Extracting features..."
+            ):
                 x = batch[0]
                 x = x.to(self.device)
                 bs = x.shape[0]
@@ -61,7 +64,7 @@ class CLIPExtractor(FeatureExtractor):
         )
         self.clip.requires_grad_(False)
         self.feature_size = self.clip.visual.output_dim
-        self.name = 'clip'
+        self.name = "clip"
 
         self.train_transform = transforms.Compose(
             [
@@ -97,7 +100,9 @@ class CLIPExtractor(FeatureExtractor):
         return x
 
 
-def create_feature_extractor(type: FeatureExtractorType, device: str = None) -> FeatureExtractor:
+def create_feature_extractor(
+    type: FeatureExtractorType, device: str = None
+) -> FeatureExtractor:
     if type == FeatureExtractorType.CLIP:
         feature_extractor = CLIPExtractor(
             model_name="ViT-B-16",
