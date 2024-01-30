@@ -89,6 +89,8 @@ class CLIPExtractor(FeatureExtractor):
                 ),
             ]
         )
+        self.mean = -0.0057645994
+        self.std = 0.5654832
 
     def forward(self, data: torch.Tensor, mode: str = "val"):
         if mode == "train":
@@ -96,7 +98,7 @@ class CLIPExtractor(FeatureExtractor):
         else:
             x = self.test_transform(data)
         x = self.clip.encode_image(x)
-        x = x / x.norm(dim=-1, keepdim=True)
+        x = (x - self.mean) / self.std
         return x.float()
 
 

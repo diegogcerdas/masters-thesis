@@ -29,8 +29,8 @@ class NSDInducedDataset(data.Dataset):
         self.n_neighbors = n_neighbors
         self.seed = seed
         self.target_size = 1
-        features = self.load_features()
-        self.D = pairwise_distances(features, metric=metric)
+        self.features = self.load_features()
+        self.D = pairwise_distances(self.features, metric=metric)
         self.targets = self.compute_targets(self.D)
         self.low_dim = self.compute_low_dim(self.D)
 
@@ -70,12 +70,10 @@ class NSDInducedDataset(data.Dataset):
             targets = []
             for i in tqdm(range(len(self)), desc="Computing targets..."):
                 closest = np.argsort(distance_matrix[i, :])[: self.n_neighbors + 1]
-                acts = []
-                for c in closest:
-                    _, a, _ = self.nsd[c]
-                    acts.append(a.mean().item())
-                targets.append(np.mean(acts))
+                acts = self.nsd.fmri_data[closest]
+                targets.append(acts.mean().item())
             targets = np.array(targets)
+            targets = (targets - targets.mean()) / targets.std()
             os.makedirs(folder, exist_ok=True)
             np.save(f, targets)
         else:

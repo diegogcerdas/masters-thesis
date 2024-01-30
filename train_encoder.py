@@ -14,6 +14,8 @@ from model.encoder.encoder_module import EncoderModule
 from model.feature_extractor import create_feature_extractor
 from utils.configs import config_from_args
 
+from utils.callbacks import WandbTSNECallback
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -32,7 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("--logs-dir", type=str, default="./logs/")
     parser.add_argument("--exp-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--lr-start", type=float, default=1e-2)
+    parser.add_argument("--lr-start", type=float, default=1e-3)
     parser.add_argument("--lr-end", type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=18)
@@ -132,8 +134,10 @@ if __name__ == "__main__":
     )
     wandb_logger = WandbLogger()
 
+    tsne_callback = WandbTSNECallback()
+
     logger = [wandb_logger, csv_logger]
-    callbacks = [checkpoint_callback]
+    callbacks = [checkpoint_callback, tsne_callback]
 
     trainer = pl.Trainer(
         accelerator="gpu" if str(cfg.device).startswith("cuda") else "cpu",

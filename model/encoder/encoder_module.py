@@ -39,11 +39,11 @@ class EncoderModule(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def compute_loss(self, batch, mode):
-        img, target, low_dim = batch
+        img, target, _ = batch
         pred = self(img, mode).squeeze()
         loss = F.mse_loss(pred, target)
         self.log_stat(f"{mode}_loss", loss)
-        return loss, pred, target, low_dim
+        return loss, pred
 
     def log_stat(self, name, stat):
         self.log(
@@ -55,31 +55,10 @@ class EncoderModule(pl.LightningModule):
             logger=True,
         )
 
-    def plot_tsne(self, pred, target, low_dim, mode):
-        f, axes = plt.subplots(1, 2, figsize=(10, 5))
-        pred = pred.squeeze().detach().cpu().numpy()
-        target = target.squeeze().detach().cpu().numpy()
-        low_dim = low_dim.squeeze().detach().cpu().numpy()
-        axes[0].scatter(low_dim[:, 0], low_dim[:, 1], c=pred, cmap="RdBu_r", vmin=0, vmax=1)
-        axes[1].scatter(low_dim[:, 0], low_dim[:, 1], c=target, cmap="RdBu_r", vmin=0, vmax=1)
-        axes[0].set_title("Prediction")
-        axes[1].set_title("Target")
-        axes[0].set_xticks([])
-        axes[0].set_yticks([])
-        axes[1].set_xticks([])
-        axes[1].set_yticks([])
-        plt.tight_layout()
-        self.trainer.logger.log_image(key=f"Recon {mode}", images=[f])
-        plt.close()
-
     def training_step(self, batch, batch_idx):
-        loss, pred, target, low_dim = self.compute_loss(batch, "train")
-        if batch_idx == 0:
-            self.plot_tsne(pred, target, low_dim, "train")
+        loss, _ = self.compute_loss(batch, "train")
         return loss
 
     def validation_step(self, batch, batch_idx):
-        _, pred, target, low_dim = self.compute_loss(batch, "val")
-        if batch_idx == 0:
-            self.plot_tsne(pred, target, low_dim, "val")
-        return pred, target, low_dim
+        _, pred = self.compute_loss(batch, "val")
+        return pred
