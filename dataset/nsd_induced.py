@@ -30,9 +30,9 @@ class NSDInducedDataset(data.Dataset):
         self.seed = seed
         self.target_size = 1
         features = self.load_features()
-        D = pairwise_distances(features, metric=metric)
-        self.targets = self.compute_targets(D)
-        self.low_dim = self.compute_low_dim(D)
+        self.D = pairwise_distances(features, metric=metric)
+        self.targets = self.compute_targets(self.D)
+        self.low_dim = self.compute_low_dim(self.D)
 
     def __len__(self):
         return len(self.nsd)
@@ -76,7 +76,6 @@ class NSDInducedDataset(data.Dataset):
                     acts.append(a.mean().item())
                 targets.append(np.mean(acts))
             targets = np.array(targets)
-            targets = (targets - targets.min()) / (targets.max() - targets.min())
             os.makedirs(folder, exist_ok=True)
             np.save(f, targets)
         else:

@@ -31,10 +31,10 @@ if __name__ == "__main__":
     parser.add_argument("--ckpt-dir", type=str, default="./checkpoints/")
     parser.add_argument("--logs-dir", type=str, default="./logs/")
     parser.add_argument("--exp-name", type=str, default=None)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--lr-start", type=float, default=1e-1)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--lr-start", type=float, default=1e-2)
     parser.add_argument("--lr-end", type=float, default=1e-4)
-    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=18)
     parser.add_argument("--max-epochs", type=int, default=100)
     parser.add_argument(
