@@ -8,6 +8,9 @@ from torchvision import transforms
 from utils.custom_transforms import RandomSpatialOffset
 from torch.utils import data
 from tqdm import tqdm
+from dataset.natural_scenes import NaturalScenesDataset
+
+import os
 
 
 # TODO: Add support for other embeddings
@@ -24,23 +27,30 @@ class FeatureExtractor(abc.ABC, torch.nn.Module):
         super().__init__()
         self.device = device
         self.feature_size = ...
+        self.name = ...
 
-    def extract_for_dataset(self, dataset: data.Dataset, batch_size: int):
-        dataloader = data.DataLoader(
-            dataset,
-            batch_size=batch_size,
-            drop_last=False,
-            shuffle=False,
-        )
-        embeddings = []
-        for batch in tqdm(dataloader, total=len(dataloader)):
-            x = batch[0]
-            x = x.to(self.device)
-            bs = x.shape[0]
-            x = self(x).reshape((bs, -1)).detach().cpu().numpy()
-            embeddings.append(x)
-        embeddings = np.concatenate(embeddings, axis=0)
-        return embeddings
+    def extract_for_dataset(self, filename: str, dataset: NaturalScenesDataset, batch_size: int = 8):
+        folder = os.path.dirname(filename)
+        if not os.path.exists(filename):
+            dataloader = data.DataLoader(
+                dataset,
+                batch_size=batch_size,
+                drop_last=False,
+                shuffle=False,
+            )
+            features = []
+            for batch in tqdm(dataloader, total=len(dataloader)):
+                x = batch[0]
+                x = x.to(self.device)
+                bs = x.shape[0]
+                x = self(x).reshape((bs, -1)).detach().cpu().numpy()
+                features.append(x)
+            features = np.concatenate(features, axis=0)
+            os.makedirs(folder, exist_ok=True)
+            np.save(filename, features)
+        else:
+            features = np.load(filename)
+        return features
 
 
 class CLIPExtractor(FeatureExtractor):
@@ -49,10 +59,9 @@ class CLIPExtractor(FeatureExtractor):
         self.clip, _, _ = open_clip.create_model_and_transforms(
             model_name=model_name, pretrained=pretrained
         )
-        if self.device is not None:
-            self.clip.to(self.device)
         self.clip.requires_grad_(False)
         self.feature_size = self.clip.visual.output_dim
+        self.name = 'clip'
 
         self.train_transform = transforms.Compose(
             [
@@ -90,8 +99,10 @@ class CLIPExtractor(FeatureExtractor):
 
 def create_feature_extractor(type: FeatureExtractorType, device: str = None) -> FeatureExtractor:
     if type == FeatureExtractorType.CLIP:
-        return CLIPExtractor(
+        feature_extractor = CLIPExtractor(
             model_name="ViT-B-16",
             pretrained="laion2b_s34b_b88k",
             device=device,
         )
+    feature_extractor = feature_extractor.to(device)
+    return feature_extractor

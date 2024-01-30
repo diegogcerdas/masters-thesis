@@ -1,5 +1,5 @@
 import contextlib
-import os.path as op
+import os
 import urllib.request
 import zipfile
 
@@ -17,11 +17,11 @@ def download_coco_annotation_file(data_root: str):
 
 
 def coco_annotation(coco_id: int, data_root: str, expanded_nouns: bool = False):
-    coco_annotation_file = op.join(data_root, "annotations", "{}_{}.json")
+    coco_annotation_file = os.path.join(data_root, "annotations", "{}_{}.json")
     # Download from https://natural-scenes-dataset.s3.amazonaws.com/index.html#nsddata/experiments/nsd/
     # and place in data_root
     stim_descriptions = pd.read_csv(
-        op.join(data_root, "nsd_stim_info_merged.csv"), index_col=0
+        os.path.join(data_root, "nsd_stim_info_merged.csv"), index_col=0
     )
     subj_info = stim_descriptions.iloc[coco_id]
     annot_file = coco_annotation_file.format("captions", subj_info["cocoSplit"])

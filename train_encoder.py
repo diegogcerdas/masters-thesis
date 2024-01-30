@@ -8,8 +8,10 @@ from pytorch_lightning.loggers import CSVLogger
 from torch.utils import data
 
 from dataset.natural_scenes import NaturalScenesDataset
+from dataset.nsd_induced import NSDInducedDataset
 from model.encoder.encoder_module import EncoderModule
 from utils.configs import config_from_args
+from model.feature_extractor import create_feature_extractor
 
 import wandb
 from pytorch_lightning.loggers import WandbLogger
@@ -23,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument("--hemisphere", type=str, default="left")
     parser.add_argument("--feature-extractor-type", type=str, default="clip")
     parser.add_argument("--encoder-type", type=str, default="linear")
-    parser.add_argument("--n-neighbors", type=int, default=0)
+    parser.add_argument("--n-neighbors", type=int, default=50)
     parser.add_argument("--distance-metric", type=str, default="cosine")
 
     # Training Parameters
@@ -58,17 +60,26 @@ if __name__ == "__main__":
         roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
         cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{cfg.feature_extractor_type}_{cfg.encoder_type}_{cfg.seed}"
 
-    dataset = NaturalScenesDataset(
+    nsd = NaturalScenesDataset(
         root=cfg.data_dir,
         subject=cfg.subject,
         partition="train",
         roi=cfg.roi,
         hemisphere=cfg.hemisphere,
-        feature_extractor_type=cfg.feature_extractor_type,
-        n_neighbors=cfg.n_neighbors,
-        distance_metric=cfg.distance_metric,
-        device=cfg.device,
     )
+
+    feature_extractor = create_feature_extractor(cfg.feature_extractor_type, cfg.device)
+    f = folder = os.path.join(cfg.data_dir, f"subj{cfg.subject:02d}", "training_split", 'features', f'{cfg.feature_extractor_type}.npy')
+    _ = feature_extractor.extract_for_dataset(f, nsd)
+
+    dataset = NSDInducedDataset(
+        nsd=nsd,
+        feature_extractor_type=cfg.feature_extractor_type,
+        metric=cfg.distance_metric,
+        n_neighbors=cfg.n_neighbors,
+        seed=cfg.seed,
+    )
+
     train_size = int(0.9 * len(dataset))
     val_size = len(dataset) - train_size
     train_set, val_set = data.random_split(dataset, [train_size, val_size])
@@ -90,7 +101,7 @@ if __name__ == "__main__":
     )
 
     model = EncoderModule(
-        input_size=dataset.input_size,
+        input_size=feature_extractor.feature_size,
         output_size=dataset.target_size,
         encoder_type=cfg.encoder_type,
         learning_rate=cfg.lr_start,

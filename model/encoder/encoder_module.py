@@ -4,11 +4,14 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ExponentialLR
 from model.encoder.encoder import create_encoder
 import matplotlib.pyplot as plt
+from model.feature_extractor import FeatureExtractor
+import torch
 
 
 class EncoderModule(pl.LightningModule):
     def __init__(
         self,
+        feature_extractor: FeatureExtractor,
         input_size: int,
         output_size: int,
         encoder_type: str,
@@ -17,12 +20,15 @@ class EncoderModule(pl.LightningModule):
     ):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters()
+        self.feature_extractor = feature_extractor
         self.learning_rate = learning_rate
         self.lr_gamma = lr_gamma
 
         self.encoder = create_encoder(encoder_type, input_size, output_size)
 
-    def forward(self, x):
+    def forward(self, x, mode="val"):
+        with torch.no_grad():
+            x = self.feature_extractor(x, mode)
         x = self.encoder(x)
         return x
 
@@ -34,11 +40,11 @@ class EncoderModule(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def compute_loss(self, batch, mode):
-        features, target, lowdim, _ = batch
-        pred = self(features).squeeze()
+        img, target, low_dim = batch
+        pred = self(img, mode).squeeze()
         loss = F.mse_loss(pred, target)
         self.log_stat(f"{mode}_loss", loss)
-        return loss, pred, target, lowdim
+        return loss, pred, target, low_dim
 
     def log_stat(self, name, stat):
         self.log(
@@ -65,9 +71,11 @@ class EncoderModule(pl.LightningModule):
         plt.close()
 
     def training_step(self, batch, batch_idx):
-        loss, _, _, _ = self.compute_loss(batch, "train")
+        loss, pred, target, low_dim = self.compute_loss(batch, "train")
+        self.plot_tsne(pred, target, low_dim, "train")
         return loss
 
     def validation_step(self, batch, batch_idx):
-        _, pred, target, lowdim = self.compute_loss(batch, "val")
-        return pred, target, lowdim
+        _, pred, target, low_dim = self.compute_loss(batch, "val")
+        self.plot_tsne(pred, target, low_dim, "val")
+        return pred, target, low_dim

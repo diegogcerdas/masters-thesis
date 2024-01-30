@@ -5,21 +5,12 @@ import numpy as np
 import pandas as pd
 import torch
 from PIL import Image
-from torch.utils.data import Dataset
 from torchvision import transforms
-
-from dataset.feature_extractor import create_feature_extractor
-from utils.distance import distance_matrix
-
-import os.path as op
-
-from sklearn import manifold
-from tqdm import tqdm
 
 from torch.utils import data
 
 
-class NaturalScenesDataset(Dataset):
+class NaturalScenesDataset(data.Dataset):
     def __init__(
         self,
         root: str,
@@ -27,12 +18,6 @@ class NaturalScenesDataset(Dataset):
         partition: str,
         roi: Union[str, List[str]] = None,
         hemisphere: str = None,
-        feature_extractor_type: str = None,
-        n_neighbors: int = None,
-        distance_metric: str = None,
-        seed: int = 42,
-        batch_size_target_extraction: int = 8,
-        device: str = None,
     ):
         super().__init__()
         assert partition in ["train", "test", "debug_train", "debug_test"]
@@ -40,32 +25,19 @@ class NaturalScenesDataset(Dataset):
         if partition == "train":
             assert roi is not None
             assert hemisphere is not None
-            assert feature_extractor_type is not None
-            assert n_neighbors >= 0
-            assert distance_metric is not None
 
         self.root = root
         self.subject = subject
         self.partition = partition
-        self.device = device
 
         self.df = self.build_image_info_df()
         self.df = self.df[self.df.partition == partition.replace("debug_", "")]
         self.split = "train" if "train" in partition else "test"
 
         if partition == "train":
-            self.feature_extractor_type = feature_extractor_type
-            self.feature_extractor = create_feature_extractor(feature_extractor_type, device)
-            self.n_neighbors = n_neighbors
-            self.metric = distance_metric
-            self.seed = seed
-            self.batch_size_target_extraction = batch_size_target_extraction
             self.rois, self.roi_classes = self.parse_roi(roi)
             self.hemisphere = hemisphere
             self.fmri_data = self.load_fmri_data()
-            self.features, self.targets, self.low_dim = self.compute_features_targets_lowdim()
-            self.input_size = self.features.shape[1]
-            self.target_size = 1
 
     def __len__(self):
         return self.df.shape[0]
@@ -75,65 +47,9 @@ class NaturalScenesDataset(Dataset):
         img = Image.open(os.path.join(self.root, self.df.iloc[idx]["filename"]))
         img = transforms.ToTensor()(img)
         if self.partition == "train":
-            # TODO: add data augmentation to features?
-            features = self.features[idx]
-            target = self.targets[idx]
-            low_dim = self.low_dim[idx]
-            return features, target, low_dim
+            activation = self.fmri_data[idx]
+            return img, activation, coco_id
         return img, coco_id
-    
-    def compute_features_targets_lowdim(self):
-        features = self.compute_features()
-        features = (features - features.min()) / (features.max() - features.min())
-        D = distance_matrix(self.root, self.subject, self.partition, self.feature_extractor, self.metric)
-        model = manifold.TSNE(n_components=2, metric="precomputed", init="random", random_state=self.seed)
-        targets = self.compute_targets(D)
-        low_dim = model.fit_transform(D)
-        return features, targets, low_dim
-    
-    def compute_features(self):
-        folder = op.join(self.root, f"subj{self.subject:02d}", ("training_split" if self.partition == "train" else "test_split"), 'features')
-        f = op.join(folder, f'{self.feature_extractor_type}.npy')
-        if op.exists(f):
-            d = NaturalScenesDataset(self.root, self.subject, f'debug_{self.partition}')
-            dataloader = data.DataLoader(
-                d,
-                batch_size=self.batch_size_target_extraction,
-                drop_last=False,
-                shuffle=False,
-            )
-            features = []
-            for batch in tqdm(dataloader, total=len(dataloader)):
-                x = batch[0]
-                x = x.to(self.device)
-                bs = x.shape[0]
-                x = self.feature_extractor(x).reshape((bs, -1)).detach().cpu().numpy()
-                features.append(x)
-            features = np.concatenate(features, axis=0)
-            os.makedirs(folder, exist_ok=True)
-            np.save(f, features)
-        else:
-            features = np.load(f)
-        return features
-
-    def compute_targets(self, D):
-        folder = op.join(self.root, f"subj{self.subject:02d}", ("training_split" if self.partition == "train" else "test_split"), 'targets')
-        f = op.join(folder, f'{self.feature_extractor_type}_{self.metric}_{self.n_neighbors}_{self.seed}_{self.hemisphere[0]}_{"_".join(sorted(self.rois))}.npy')
-        if not op.exists(f):
-            targets = []
-            for i in tqdm(range(len(self))):
-                closest = np.argsort(D[i, :])[:self.n_neighbors+1]
-                acts = []
-                for c in closest:
-                    _, a, _ = self[c]
-                    acts.append(a.item())
-                targets.append(np.mean(acts))
-            targets = np.array(targets)
-            os.makedirs(folder, exist_ok=True)
-            np.save(f, targets)
-        else:
-            targets = np.load(f)
-        return targets
 
     def load_fmri_data(self):
         subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
@@ -156,8 +72,6 @@ class NaturalScenesDataset(Dataset):
             roi_mapping = list(roi_map.keys())[list(roi_map.values()).index(roi_)]
             fmri_mask += np.asarray(roi_class_npy == roi_mapping, dtype=int)
         fmri = fmri[:, np.where(fmri_mask)[0]]
-        fmri = fmri.mean(-1)
-        fmri = (fmri - fmri.mean()) / fmri.std()
         return torch.from_numpy(fmri).float()
 
     def parse_roi(self, roi):
