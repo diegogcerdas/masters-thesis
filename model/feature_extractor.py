@@ -76,22 +76,16 @@ class FeatureExtractor(nn.Module):
         return x
 
     def extract_for_dataset(
-        self, filename: str, dataset: NaturalScenesDataset, batch_size: int = 8
+        self, dataset: NaturalScenesDataset, batch_size: int = 8
     ):
         assert not dataset.return_coco_id
-        folder = os.path.dirname(filename)
-        if not os.path.exists(filename):
-            dataloader = DataLoader(dataset=dataset, batch_size=batch_size, backend='pt')
-            features = self.extractor.extract_features(
-                batches=dataloader,
-                module_name=self.module_name,
-                flatten_acts=True,
-                output_type="ndarray",
-            )
-            os.makedirs(folder, exist_ok=True)
-            np.save(filename, features)
-        else:
-            features = np.load(filename)
+        dataloader = DataLoader(dataset=dataset, batch_size=batch_size, backend='pt')
+        features = self.extractor.extract_features(
+            batches=dataloader,
+            module_name=self.module_name,
+            flatten_acts=True,
+            output_type="ndarray",
+        ).astype(np.float32)
         return features
 
 
@@ -143,35 +137,30 @@ class CLIPExtractor(nn.Module):
         return x.float()
     
     def extract_for_dataset(
-        self, filename: str, dataset: NaturalScenesDataset, batch_size: int = 8
+        self, dataset: NaturalScenesDataset, batch_size: int = 8
     ):
-        folder = os.path.dirname(filename)
-        if not os.path.exists(filename):
-            dataloader = data.DataLoader(
-                dataset,
-                batch_size=batch_size,
-                drop_last=False,
-                shuffle=False,
-            )
-            features = []
-            for batch in tqdm(
-                dataloader, total=len(dataloader), desc="Extracting features..."
-            ):
-                x = batch[0]
-                x = x.to(self.device)
-                bs = x.shape[0]
-                x = self(x).reshape((bs, -1)).detach().cpu().numpy()
-                features.append(x)
-            features = np.concatenate(features, axis=0)
-            os.makedirs(folder, exist_ok=True)
-            np.save(filename, features)
-        else:
-            features = np.load(filename)
+        assert not dataset.return_coco_id
+        dataloader = data.DataLoader(
+            dataset,
+            batch_size=batch_size,
+            drop_last=False,
+            shuffle=False,
+        )
+        features = []
+        for batch in tqdm(
+            dataloader, total=len(dataloader), desc="Extracting features..."
+        ):
+            x = batch
+            x = x.to(self.device)
+            bs = x.shape[0]
+            x = self(x).reshape((bs, -1)).detach().cpu().numpy()
+            features.append(x)
+        features = np.concatenate(features, axis=0).astype(np.float32)
         return features
 
 
 def create_feature_extractor(
-    type: FeatureExtractorType, device: str = None
+    type: FeatureExtractorType, device: str
 ):
     if type == FeatureExtractorType.CLIP:
         feature_extractor = CLIPExtractor(
@@ -186,8 +175,8 @@ def create_feature_extractor(
             source="torchvision",
             model_parameters={'weights': 'DEFAULT'},
             module_name="features.2",
-            mean=None,
-            std=None,
+            mean=0.2868,
+            std=0.5219,
             device=device,
         )
     elif type == FeatureExtractorType.ALEXNET_2:
@@ -197,8 +186,8 @@ def create_feature_extractor(
             source="torchvision",
             model_parameters={'weights': 'DEFAULT'},
             module_name="features.5",
-            mean=None,
-            std=None,
+            mean=0.6826,
+            std=1.0715,
             device=device,
         )
     elif type == FeatureExtractorType.ALEXNET_3:
@@ -208,8 +197,8 @@ def create_feature_extractor(
             source="torchvision",
             model_parameters={'weights': 'DEFAULT'},
             module_name="features.7",
-            mean=None,
-            std=None,
+            mean=0.2329,
+            std=0.7243,
             device=device,
         )
     elif type == FeatureExtractorType.ALEXNET_4:
@@ -219,8 +208,8 @@ def create_feature_extractor(
             source="torchvision",
             model_parameters={'weights': 'DEFAULT'},
             module_name="features.9",
-            mean=None,
-            std=None,
+            mean=0.2405,
+            std=0.6834,
             device=device,
         )
     elif type == FeatureExtractorType.ALEXNET_5:
@@ -230,8 +219,8 @@ def create_feature_extractor(
             source="torchvision",
             model_parameters={'weights': 'DEFAULT'},
             module_name="avgpool",
-            mean=None,
-            std=None,
+            mean=0.3636,
+            std= 0.7181,
             device=device,
         )
     elif type == FeatureExtractorType.ALEXNET_6:
@@ -241,8 +230,8 @@ def create_feature_extractor(
             source="torchvision",
             model_parameters={'weights': 'DEFAULT'},
             module_name="classifier",
-            mean=None,
-            std=None,
+            mean=0.0014,
+            std=2.2768,
             device=device,
         )
     return feature_extractor

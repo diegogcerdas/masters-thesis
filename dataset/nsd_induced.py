@@ -11,26 +11,28 @@ from dataset.natural_scenes import NaturalScenesDataset
 from PIL import Image
 from torchvision import transforms
 
+from model.feature_extractor import FeatureExtractor
+
 
 class NSDInducedDataset(data.Dataset):
     def __init__(
         self,
         nsd: NaturalScenesDataset,
-        feature_extractor_type: str,
+        feature_extractor: FeatureExtractor,
         metric: str,
         n_neighbors: int,
         seed: int,
+        batch_size_feature_extraction: int = 32,
     ):
         super().__init__()
-        assert nsd.partition == "train"
+        assert nsd.partition == 'train'
         self.nsd = nsd
-        self.feature_extractor_type = feature_extractor_type
         self.metric = metric
         self.n_neighbors = n_neighbors
         self.seed = seed
         self.target_size = 1
-        self.features = self.load_features()
-        self.D = pairwise_distances(self.features, metric=metric)
+        self.batch_size_feature_extraction = batch_size_feature_extraction
+        self.D = self.load_distance_matrix(feature_extractor, metric)
         self.targets = self.compute_targets(self.D)
         self.low_dim = self.compute_low_dim(self.D)
 
@@ -43,41 +45,33 @@ class NSDInducedDataset(data.Dataset):
         target = self.targets[idx].astype(np.float32)
         low_dim = self.low_dim[idx]
         return img, target, low_dim
-
-    def load_features(self):
+    
+    def load_distance_matrix(self, feature_extractor, metric):
         folder = os.path.join(
-            self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "features"
+            self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "distance"
         )
-        f = os.path.join(folder, f"{self.feature_extractor_type}.npy")
-        try:
-            print(f"Loading features from {f}")
-            features = np.load(f)
-        except:
-            raise ValueError(
-                f"Features not found at {f}. Please run the feature extractor first."
-            )
-        return features
+        f = os.path.join(folder, f"{feature_extractor.name}_{metric}.npy")
+        if not os.path.exists(f):
+            print("Computing distance matrix...")
+            self.nsd.partition = 'debug_train'
+            features = feature_extractor.extract_for_dataset(self.nsd, self.batch_size_feature_extraction)
+            self.nsd.partition = 'train'
+            D = pairwise_distances(features, metric=metric).astype(np.float32)
+            os.makedirs(folder, exist_ok=True)
+            np.save(f, D)
+            print("Done.")
+        else:
+            D = np.load(f)
+        return D
 
     def compute_targets(self, distance_matrix):
-        folder = os.path.join(
-            self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "targets"
-        )
-        f = os.path.join(
-            folder,
-            f'{self.feature_extractor_type}_{self.metric}_{self.n_neighbors}_{self.seed}_{self.nsd.hemisphere[0]}_{"_".join(sorted(self.nsd.rois))}.npy',
-        )
-        if not os.path.exists(f):
-            targets = []
-            for i in tqdm(range(len(self)), desc="Computing targets..."):
-                closest = np.argsort(distance_matrix[i, :])[: self.n_neighbors + 1]
-                acts = self.nsd.fmri_data[closest]
-                targets.append(acts.mean().item())
-            targets = np.array(targets)
-            targets = (targets - targets.mean()) / targets.std()
-            os.makedirs(folder, exist_ok=True)
-            np.save(f, targets)
-        else:
-            targets = np.load(f)
+        targets = []
+        for i in tqdm(range(len(self)), desc="Computing targets..."):
+            closest = np.argsort(distance_matrix[i, :])[: self.n_neighbors + 1]
+            acts = self.nsd.fmri_data[closest]
+            targets.append(acts.mean().item())
+        targets = np.array(targets)
+        targets = (targets - targets.mean()) / targets.std()
         return targets
 
     def compute_low_dim(self, distance_matrix):

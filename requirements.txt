@@ -1,3 +1,4 @@
+thingsvision
 pytorch-lightning
 ipykernel
 matplotlib
@@ -5,6 +6,5 @@ pandas
 torchvision
 nilearn
 torcheval
-thingsvision
 plotly
-open_clip_torch -U
+open_clip_torch
