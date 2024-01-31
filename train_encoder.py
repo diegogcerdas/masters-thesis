@@ -66,23 +66,14 @@ if __name__ == "__main__":
         roi=cfg.roi,
         hemisphere=cfg.hemisphere,
     )
-
     feature_extractor = create_feature_extractor(cfg.feature_extractor_type, cfg.device)
-    f = os.path.join(
-        cfg.data_dir,
-        f"subj{cfg.subject:02d}",
-        "training_split",
-        "features",
-        f"{cfg.feature_extractor_type}.npy",
-    )
-    _ = feature_extractor.extract_for_dataset(f, nsd)
-
     dataset = NSDInducedDataset(
         nsd=nsd,
-        feature_extractor_type=cfg.feature_extractor_type,
+        feature_extractor=feature_extractor,
         metric=cfg.distance_metric,
         n_neighbors=cfg.n_neighbors,
         seed=cfg.seed,
+        batch_size_feature_extraction=cfg.batch_size,
     )
 
     train_size = int(0.9 * len(dataset))
