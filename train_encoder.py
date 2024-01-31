@@ -34,8 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("--logs-dir", type=str, default="./logs/")
     parser.add_argument("--exp-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--lr-start", type=float, default=1e-3)
-    parser.add_argument("--lr-end", type=float, default=1e-4)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--num-workers", type=int, default=18)
     parser.add_argument("--max-epochs", type=int, default=100)
@@ -111,8 +110,7 @@ if __name__ == "__main__":
         input_size=feature_extractor.feature_size,
         output_size=dataset.target_size,
         encoder_type=cfg.encoder_type,
-        learning_rate=cfg.lr_start,
-        lr_gamma=(cfg.lr_end / cfg.lr_start) ** (1 / (cfg.max_epochs - 1)),
+        learning_rate=cfg.learning_rate,
     )
 
     checkpoint_callback = ModelCheckpoint(

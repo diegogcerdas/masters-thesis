@@ -1,12 +1,12 @@
-import matplotlib.pyplot as plt
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.optim.lr_scheduler import ExponentialLR
 
 from model.encoder.encoder import create_encoder
 from model.feature_extractor import FeatureExtractor
+
+from torcheval.metrics.functional import r2_score
 
 
 class EncoderModule(pl.LightningModule):
@@ -17,13 +17,11 @@ class EncoderModule(pl.LightningModule):
         output_size: int,
         encoder_type: str,
         learning_rate: float,
-        lr_gamma: float,
     ):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters(ignore="feature_extractor")
         self.feature_extractor = feature_extractor
         self.learning_rate = learning_rate
-        self.lr_gamma = lr_gamma
 
         self.encoder = create_encoder(encoder_type, input_size, output_size)
 
@@ -35,13 +33,14 @@ class EncoderModule(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=self.learning_rate)
-        scheduler = ExponentialLR(optimizer, gamma=self.lr_gamma)
-        return [optimizer], [scheduler]
+        return optimizer
 
     def compute_loss(self, batch, mode):
         img, target, _ = batch
         pred = self(img, mode).squeeze()
         loss = F.mse_loss(pred, target)
+        metric = r2_score(pred, target)
+        self.log_stat(f"{mode}_r2", metric)
         self.log_stat(f"{mode}_loss", loss)
         return loss, pred
 

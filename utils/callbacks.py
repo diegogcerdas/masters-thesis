@@ -16,7 +16,7 @@ class WandbTSNECallback(pl.Callback):
     ) -> None:
         self.targets = np.array(self.targets)
         self.preds = np.array(self.preds)
-        self.low_dim = np.stack(self.low_dim)
+        self.low_dim = np.concatenate(self.low_dim)
 
         f = plt.figure(figsize=(6, 5))
         plt.scatter(self.low_dim[:, 0], self.low_dim[:, 1], c=self.targets, cmap='RdBu_r', vmin=-3, vmax=3, s=5)
@@ -47,9 +47,9 @@ class WandbTSNECallback(pl.Callback):
         batch_idx: int,
     ) -> None:
         _, target, low_dim = batch
-        target = target.squeeze().detach().cpu().numpy()
+        target = target.squeeze().detach().cpu().numpy().tolist()
         low_dim = low_dim.squeeze().detach().cpu().numpy()
-        pred = outputs.squeeze().detach().cpu().numpy()
-        self.targets.append(target)
-        self.preds.append(pred)
+        pred = outputs.squeeze().detach().cpu().numpy().tolist()
+        self.targets = self.targets + target
+        self.preds = self.preds + pred
         self.low_dim.append(low_dim)

@@ -17,6 +17,7 @@ class NaturalScenesDataset(data.Dataset):
         partition: str,
         roi: Union[str, List[str]] = None,
         hemisphere: str = None,
+        return_coco_id: bool = True,
     ):
         super().__init__()
         assert partition in ["train", "test", "debug_train", "debug_test"]
@@ -28,6 +29,7 @@ class NaturalScenesDataset(data.Dataset):
         self.root = root
         self.subject = subject
         self.partition = partition
+        self.return_coco_id = return_coco_id
 
         self.df = self.build_image_info_df()
         self.df = self.df[self.df.partition == partition.replace("debug_", "")]
@@ -47,8 +49,12 @@ class NaturalScenesDataset(data.Dataset):
         img = transforms.ToTensor()(img)
         if self.partition == "train":
             activation = self.fmri_data[idx]
-            return img, activation, coco_id
-        return img, coco_id
+            if self.return_coco_id:
+                return img, activation, coco_id
+            return img, activation
+        if self.return_coco_id:
+            return img, coco_id
+        return img
 
     def load_fmri_data(self):
         subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
