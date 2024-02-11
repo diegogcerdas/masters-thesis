@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument("--feature-extractor-type", type=str, default="clip")
     parser.add_argument("--n-neighbors", type=int, default=0)
     parser.add_argument("--distance-metric", type=str, default="cosine")
-    parser.add_argument("--predict-average", action=BooleanOptionalAction, default=False) #
+    parser.add_argument("--predict-average", action=BooleanOptionalAction, default=True)
 
     # Training Parameters
     parser.add_argument("--data-dir", type=str, default="./data/")
@@ -37,8 +37,8 @@ if __name__ == "__main__":
     parser.add_argument("--exp-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
-    parser.add_argument("--batch-size", type=int, default=2) #
-    parser.add_argument("--num-workers", type=int, default=8) #
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--num-workers", type=int, default=18)
     parser.add_argument("--max-epochs", type=int, default=50)
     parser.add_argument(
         "--device",
@@ -60,7 +60,8 @@ if __name__ == "__main__":
 
     if cfg.exp_name is None:
         roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
-        cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{cfg.feature_extractor_type}_{cfg.n_neighbors}_{cfg.distance_metric}_{cfg.seed}"
+        pred_str = "avg" if cfg.predict_average else "all"
+        cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{cfg.feature_extractor_type}_{cfg.n_neighbors}_{cfg.distance_metric}_{pred_str}_{cfg.seed}"
 
     # Initialize feature extractor
     feature_extractor = create_feature_extractor(cfg.feature_extractor_type, cfg.device)
