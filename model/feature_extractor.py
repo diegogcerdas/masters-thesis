@@ -1,6 +1,3 @@
-import abc
-import os
-
 import numpy as np
 import open_clip
 import torch
@@ -11,83 +8,11 @@ from tqdm import tqdm
 from dataset.natural_scenes import NaturalScenesDataset
 from utils.custom_transforms import RandomSpatialOffset
 
-from thingsvision import get_extractor
-from thingsvision.utils.data import DataLoader
-
 import torch.nn as nn
 
 
-# TODO: Add support for other embeddings
 class FeatureExtractorType:
     CLIP = "clip"
-    MERU = "meru"  # TODO: implement MERU
-    ALEXNET_1 = "alexnet_1"
-    ALEXNET_2 = "alexnet_2"
-    ALEXNET_3 = "alexnet_3"
-    ALEXNET_4 = "alexnet_4"
-    ALEXNET_5 = "alexnet_5"
-    ALEXNET_6 = "alexnet_6"
-    DINOV2 = "dinov2"  # TODO: implement DINOv2
-    SDVAE = "sdvae"  # TODO: implement Stable Diffusion VAE
-
-
-class FeatureExtractor(nn.Module):
-    def __init__(self, name: str, model_name: str, source: str, model_parameters: dict, module_name: str, mean: float, std: float, device: str = None):
-        super().__init__()
-        self.device = device
-        self.name = name
-        self.module_name = module_name
-        self.mean = mean
-        self.std = std
-
-        self.extractor = get_extractor(
-            model_name=model_name,
-            source=source,
-            device=str(device),
-            pretrained=True,
-            model_parameters=model_parameters,
-        )
-        self.extractor.model.requires_grad_(False)
-
-        self.feature_size = self.extractor.extract_features(
-            batches=[torch.randn(1, 3, 425, 425).to(device)],
-            module_name='features',
-            flatten_acts=True,
-            output_type="ndarray",
-        ).shape[1]
-
-        self.augmentation = transforms.Compose(
-            [
-                transforms.Lambda(lambda x: x * np.random.uniform(0.95, 1.05)),
-                RandomSpatialOffset(offset=4),
-            ]
-        )
-
-    def forward(self, x: torch.Tensor, mode: str = "val"):
-        if mode == "train":
-            x = self.augmentation(x)
-        x = self.extractor.extract_features(
-            batches=[x],
-            module_name=self.module_name,
-            flatten_acts=True,
-            output_type="ndarray",
-        )
-        x = ((x - self.mean) / self.std).float()
-        return x
-
-    def extract_for_dataset(
-        self, dataset: NaturalScenesDataset, batch_size: int = 8
-    ):
-        assert not dataset.return_coco_id
-        dataloader = DataLoader(dataset=dataset, batch_size=batch_size, backend='pt')
-        features = self.extractor.extract_features(
-            batches=dataloader,
-            module_name=self.module_name,
-            flatten_acts=True,
-            output_type="ndarray",
-        ).astype(np.float32)
-        return features
-
 
 class CLIPExtractor(nn.Module):
     def __init__(self, model_name: str, pretrained: str, device: str = None):
@@ -168,70 +93,6 @@ def create_feature_extractor(
             pretrained="laion2b_s34b_b88k",
             device=device,
         )
-    elif type == FeatureExtractorType.ALEXNET_1:
-        feature_extractor = FeatureExtractor(
-            name=type,
-            model_name="alexnet",
-            source="torchvision",
-            model_parameters={'weights': 'DEFAULT'},
-            module_name="features.2",
-            mean=0.2868,
-            std=0.5219,
-            device=device,
-        )
-    elif type == FeatureExtractorType.ALEXNET_2:
-        feature_extractor = FeatureExtractor(
-            name=type,
-            model_name="alexnet",
-            source="torchvision",
-            model_parameters={'weights': 'DEFAULT'},
-            module_name="features.5",
-            mean=0.6826,
-            std=1.0715,
-            device=device,
-        )
-    elif type == FeatureExtractorType.ALEXNET_3:
-        feature_extractor = FeatureExtractor(
-            name=type,
-            model_name="alexnet",
-            source="torchvision",
-            model_parameters={'weights': 'DEFAULT'},
-            module_name="features.7",
-            mean=0.2329,
-            std=0.7243,
-            device=device,
-        )
-    elif type == FeatureExtractorType.ALEXNET_4:
-        feature_extractor = FeatureExtractor(
-            name=type,
-            model_name="alexnet",
-            source="torchvision",
-            model_parameters={'weights': 'DEFAULT'},
-            module_name="features.9",
-            mean=0.2405,
-            std=0.6834,
-            device=device,
-        )
-    elif type == FeatureExtractorType.ALEXNET_5:
-        feature_extractor = FeatureExtractor(
-            name=type,
-            model_name="alexnet",
-            source="torchvision",
-            model_parameters={'weights': 'DEFAULT'},
-            module_name="avgpool",
-            mean=0.3636,
-            std= 0.7181,
-            device=device,
-        )
-    elif type == FeatureExtractorType.ALEXNET_6:
-        feature_extractor = FeatureExtractor(
-            name=type,
-            model_name="alexnet",
-            source="torchvision",
-            model_parameters={'weights': 'DEFAULT'},
-            module_name="classifier",
-            mean=0.0014,
-            std=2.2768,
-            device=device,
-        )
+    else:
+        raise ValueError(f"Invalid feature extractor type: {type}")
     return feature_extractor

@@ -3,27 +3,27 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 
-from model.encoder.encoder import create_encoder
-from model.feature_extractor import FeatureExtractor
-
 from torcheval.metrics.functional import r2_score
 
 
 class EncoderModule(pl.LightningModule):
     def __init__(
         self,
-        feature_extractor: FeatureExtractor,
+        feature_extractor,
         input_size: int,
         output_size: int,
-        encoder_type: str,
         learning_rate: float,
+        brain_wise_mean: float,
+        brain_wise_std: float,
     ):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters(ignore="feature_extractor")
         self.feature_extractor = feature_extractor
         self.learning_rate = learning_rate
+        self.brain_wise_mean = brain_wise_mean
+        self.brain_wise_std = brain_wise_std
 
-        self.encoder = create_encoder(encoder_type, input_size, output_size)
+        self.encoder = torch.nn.Linear(input_size, output_size)
 
     def forward(self, x, mode="val"):
         with torch.no_grad():
