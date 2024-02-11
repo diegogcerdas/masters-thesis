@@ -1,6 +1,7 @@
 data/
 checkpoints/
 logs/
+outputs/
 __pycache__/
 wandb/
 test.ipynb

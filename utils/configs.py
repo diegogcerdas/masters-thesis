@@ -27,13 +27,25 @@ class ConfigTrain:
 
 @dataclass
 class ConfigSynthesis:
+    prompt: str
+    seed: int
+    g: float
+    inference_steps: int
+    outputs_dir: str
+    batch_size: int
+    device: str
+
+@dataclass
+class ConfigGuidedSynthesis:
     brain_encoder_ckpt: str
+    brain_encoder_desc: str
     prompt: str
     seed: int
     loss_scale: float
     g: float
     inference_steps: int
     iterations: int
+    learning_rate: float
     outputs_dir: str
     device: str
 
@@ -43,6 +55,8 @@ def config_from_args(args: dict, mode: str = "train"):
         class_name = ConfigTrain
     elif mode == "synthesis":
         class_name = ConfigSynthesis
+    elif mode == "guided_synthesis":
+        class_name = ConfigGuidedSynthesis
     else:
         raise ValueError("Mode must be either 'train' or 'test'")
     return class_name(

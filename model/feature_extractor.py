@@ -21,7 +21,6 @@ class CLIPExtractor(nn.Module):
         self.clip, _, _ = open_clip.create_model_and_transforms(
             model_name=model_name, pretrained=pretrained
         )
-        self.clip.requires_grad_(False)
         self.feature_size = self.clip.visual.output_dim
         self.name = "clip"
 

@@ -25,8 +25,11 @@ class EncoderModule(pl.LightningModule):
 
         self.encoder = torch.nn.Linear(input_size, output_size)
 
-    def forward(self, x, mode="val"):
-        with torch.no_grad():
+    def forward(self, x, mode="val", no_grad=True):
+        if no_grad:
+            with torch.no_grad():
+                x = self.feature_extractor(x, mode)
+        else:
             x = self.feature_extractor(x, mode)
         x = self.encoder(x)
         return x
