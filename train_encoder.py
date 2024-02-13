@@ -71,6 +71,7 @@ if __name__ == "__main__":
         partition="train",
         roi=cfg.roi,
         hemisphere=cfg.hemisphere,
+        return_coco_id=False
     )
     dataset = NSDInducedDataset(
         nsd=nsd,

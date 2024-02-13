@@ -10,7 +10,7 @@ from model.diffusion.stable_diffusion import StableDiffusion
 from dataset.natural_scenes import NaturalScenesDataset
 from utils.custom_transforms import RandomSpatialOffset
 
-from transformers import CLIPVisionModel, CLIPProcessor, CLIPTextModel
+from transformers import CLIPModel, CLIPProcessor
 
 
 class FeatureExtractorType:
@@ -50,8 +50,8 @@ class CLIPExtractor(nn.Module):
                 ),
             ]
         )
-        self.mean = -0.0057645994
-        self.std = 0.5654832
+        self.mean = 0
+        self.std = 0.5
         self.to(device)
 
     def forward(self, data: torch.Tensor, mode: str = "val"):
@@ -97,16 +97,16 @@ def create_feature_extractor(type: FeatureExtractorType, device: str):
     
 
 class CLIPVisionExtractor(nn.Module):
-    def __init__(self, clip_vision: CLIPVisionModel, processor: CLIPProcessor, ldm_name: str):
+    def __init__(self, clip: CLIPModel, processor: CLIPProcessor, ldm_name: str, device: str):
         super().__init__()
-        self.clip_vision = clip_vision
-        self.feature_size = clip_vision.vision_model.config.projection_dim
+        self.clip = clip
+        self.feature_size = clip.vision_model.config.projection_dim
         self.name = ldm_name
         self.processor = processor
+        self.device = device
 
         self.train_transform = transforms.Compose(
             [
-                transforms.Lambda(lambda x: x * np.random.uniform(0.95, 1.05)),
                 RandomSpatialOffset(offset=10),
             ]
         )
@@ -116,9 +116,10 @@ class CLIPVisionExtractor(nn.Module):
 
     def forward(self, x: torch.Tensor, mode: str = "val"):
         if mode == "train":
-            x = self.train_transform(x).to(self.clip_vision.device)
-        x = self.processor(images=x, return_tensors="pt")
-        x = self.clip_vision(x)
+            x = self.train_transform(x).to(self.device)
+        x = self.processor(images=x, return_tensors="pt")['pixel_values']
+        x = x.to(self.device)
+        x = self.clip.get_image_features(pixel_values=x)
         x = (x - self.mean) / self.std
         return x.float()
 
@@ -142,5 +143,5 @@ class CLIPVisionExtractor(nn.Module):
         features = np.concatenate(features, axis=0).astype(np.float32)
         return features
 
-def create_feature_extractor_from_ldm(ldm: StableDiffusion):
-    return CLIPVisionExtractor(ldm.clip.vision_model, ldm.processor, ldm.name)
+def create_feature_extractor_from_ldm(ldm: StableDiffusion, device: str):
+    return CLIPVisionExtractor(ldm.clip, ldm.processor, ldm.name, device)

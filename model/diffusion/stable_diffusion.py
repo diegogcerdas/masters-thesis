@@ -36,7 +36,7 @@ class StableDiffusion:
             "openai/clip-vit-large-patch14", torch_dtype=self.dtype
         )
 
-        self.name = "openai/clip-vit-large-patch14"
+        self.name = "openai-clip-vit-large-patch14"
         self.latent_shape = (batch_size, self.unet.in_channels, 64, 64)
 
     def text_enc(self, prompts, maxlen=None):

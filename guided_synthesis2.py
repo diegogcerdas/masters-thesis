@@ -7,7 +7,6 @@ import torch
 from model.brain_encoder import EncoderModule
 from model.diffusion.gradient_descent2 import GradientDescent
 from model.diffusion.stable_diffusion import StableDiffusion
-from model.feature_extractor import create_feature_extractor_from_ldm
 from utils.configs import config_from_args
 
 if __name__ == "__main__":
@@ -35,7 +34,7 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    cfg = config_from_args(args, mode="guided_synthesis")
+    cfg = config_from_args(args, mode="guided_synthesis2")
     pl.seed_everything(cfg.seed)
 
     cfg.outputs_dir = os.path.join(cfg.outputs_dir, cfg.brain_encoder_desc)

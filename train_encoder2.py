@@ -54,12 +54,12 @@ if __name__ == "__main__":
 
     # Parse arguments
     args = parser.parse_args()
-    cfg = config_from_args(args, mode="train")
+    cfg = config_from_args(args, mode="train2")
     pl.seed_everything(cfg.seed, workers=True)
 
     # Initialize feature extractor
     ldm = StableDiffusion(batch_size=1, device=cfg.device)
-    feature_extractor = create_feature_extractor_from_ldm(ldm)
+    feature_extractor = create_feature_extractor_from_ldm(ldm, cfg.device)
 
     if cfg.exp_name is None:
         roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
@@ -73,6 +73,7 @@ if __name__ == "__main__":
         partition="train",
         roi=cfg.roi,
         hemisphere=cfg.hemisphere,
+        return_coco_id=False
     )
     dataset = NSDInducedDataset(
         nsd=nsd,
