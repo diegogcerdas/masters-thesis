@@ -2,7 +2,6 @@ import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
-
 from torcheval.metrics.functional import r2_score
 
 

@@ -1,17 +1,16 @@
 import os
 
 import numpy as np
+import torch
+from PIL import Image
 from sklearn import manifold
 from sklearn.metrics import pairwise_distances
 from torch.utils import data
+from torchvision import transforms
 from tqdm import tqdm
 
 from dataset.natural_scenes import NaturalScenesDataset
 
-from PIL import Image
-from torchvision import transforms
-
-import torch
 
 class NSDInducedDataset(data.Dataset):
     def __init__(
@@ -25,7 +24,7 @@ class NSDInducedDataset(data.Dataset):
         batch_size_feature_extraction: int = 32,
     ):
         super().__init__()
-        assert nsd.partition == 'train'
+        assert nsd.partition == "train"
         self.nsd = nsd
         self.predict_average = predict_average
         self.metric = metric
@@ -46,7 +45,7 @@ class NSDInducedDataset(data.Dataset):
         target = self.targets[idx].squeeze().float()
         low_dim = self.low_dim[idx]
         return img, target, low_dim
-    
+
     def load_distance_matrix(self, feature_extractor, metric):
         folder = os.path.join(
             self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "distance"
@@ -54,9 +53,11 @@ class NSDInducedDataset(data.Dataset):
         f = os.path.join(folder, f"{feature_extractor.name}_{metric}.npy")
         if not os.path.exists(f):
             print("Computing distance matrix...")
-            self.nsd.partition = 'debug_train'
-            features = feature_extractor.extract_for_dataset(self.nsd, self.batch_size_feature_extraction)
-            self.nsd.partition = 'train'
+            self.nsd.partition = "debug_train"
+            features = feature_extractor.extract_for_dataset(
+                self.nsd, self.batch_size_feature_extraction
+            )
+            self.nsd.partition = "train"
             D = pairwise_distances(features, metric=metric).astype(np.float32)
             os.makedirs(folder, exist_ok=True)
             np.save(f, D)
@@ -73,7 +74,9 @@ class NSDInducedDataset(data.Dataset):
             if self.predict_average:
                 acts = acts.mean().item()
             targets.append(acts)
-        targets = torch.tensor(targets) if self.predict_average else torch.stack(targets)
+        targets = (
+            torch.tensor(targets) if self.predict_average else torch.stack(targets)
+        )
         targets_mean = targets.mean()
         targets_std = targets.std()
         targets = (targets - targets_mean) / targets_std

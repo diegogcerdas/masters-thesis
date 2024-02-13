@@ -25,6 +25,7 @@ class ConfigTrain:
     wandb_entity: str
     wandb_mode: str
 
+
 @dataclass
 class ConfigSynthesis:
     prompt: str
@@ -35,10 +36,12 @@ class ConfigSynthesis:
     batch_size: int
     device: str
 
+
 @dataclass
 class ConfigGuidedSynthesis:
     brain_encoder_ckpt: str
     brain_encoder_desc: str
+    feature_extractor_type: str
     prompt: str
     seed: int
     loss_scale: float

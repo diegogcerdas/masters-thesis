@@ -1,5 +1,6 @@
 import argparse
 import os
+from argparse import BooleanOptionalAction
 
 import pytorch_lightning as pl
 import torch
@@ -12,11 +13,8 @@ from dataset.natural_scenes import NaturalScenesDataset
 from dataset.nsd_induced import NSDInducedDataset
 from model.brain_encoder import EncoderModule
 from model.feature_extractor import create_feature_extractor
+from utils.callbacks import WandbR2Callback, WandbTSNECallback
 from utils.configs import config_from_args
-
-from utils.callbacks import WandbTSNECallback
-from argparse import BooleanOptionalAction
-from utils.callbacks import WandbR2Callback
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -139,7 +137,7 @@ if __name__ == "__main__":
     )
     wandb_logger = WandbLogger()
     logger = [wandb_logger, csv_logger]
-    
+
     # Initialize trainer
     trainer = pl.Trainer(
         accelerator="gpu" if str(cfg.device).startswith("cuda") else "cpu",
