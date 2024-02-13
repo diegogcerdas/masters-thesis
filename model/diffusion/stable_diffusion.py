@@ -2,7 +2,7 @@ import torch
 from diffusers import AutoencoderKL, LMSDiscreteScheduler, UNet2DConditionModel
 from PIL import Image
 from tqdm import tqdm
-from transformers import CLIPTextModel, CLIPTokenizer, CLIPVisionModel
+from transformers import CLIPTextModel, CLIPTokenizer, CLIPVisionModel, CLIPProcessor, CLIPModel
 
 """
 Adapted from Github repo: webis-de/arxiv23-prompt-embedding-manipulation
@@ -26,15 +26,17 @@ class StableDiffusion:
         self.vae = AutoencoderKL.from_pretrained(
             "CompVis/stable-diffusion-v1-4", subfolder="vae", torch_dtype=self.dtype
         ).to(self.device)
+        self.clip = CLIPModel.from_pretrained(
+            "openai/clip-vit-large-patch14", torch_dtype=self.dtype
+        )
         self.tokenizer = CLIPTokenizer.from_pretrained(
             "openai/clip-vit-large-patch14", torch_dtype=self.dtype
         )
-        self.text_encoder = CLIPTextModel.from_pretrained(
+        self.processor = CLIPProcessor.from_pretrained(
             "openai/clip-vit-large-patch14", torch_dtype=self.dtype
-        ).to(self.device)
-        self.clip_vision = CLIPVisionModel.from_pretrained(
-            "openai/clip-vit-large-patch14", torch_dtype=self.dtype
-        ).to(self.device)
+        )
+
+        self.name = "openai/clip-vit-large-patch14"
         self.latent_shape = (batch_size, self.unet.in_channels, 64, 64)
 
     def text_enc(self, prompts, maxlen=None):
@@ -50,8 +52,9 @@ class StableDiffusion:
             truncation=True,
             return_tensors="pt",
         )
-        text_encoded = self.text_encoder(inp.input_ids.to(self.device))[0]
-        return text_encoded.float()
+
+        text_encoded = self.clip.text_model(inp.input_ids.to(self.device))[0].float()
+        return text_encoded
 
     def latents_to_image(self, latents, return_pil=True):
         """
