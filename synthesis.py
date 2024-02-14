@@ -40,13 +40,14 @@ if __name__ == "__main__":
     text_embedding = torch.cat([uncondition, condition])
 
     # Synthesize images
-    imgs = ldm.text_emb_to_img(
-        text_embedding=text_embedding,
-        return_pil=True,
-        g=cfg.g,
-        seed=cfg.seed,
-        steps=cfg.inference_steps,
-    )
+    with torch.no_grad():
+        imgs = ldm.text_emb_to_img(
+            text_embedding=text_embedding,
+            return_pil=True,
+            g=cfg.g,
+            seed=cfg.seed,
+            steps=cfg.inference_steps,
+        )
 
     # Create directory for outputs
     outputs_dir_prompt = os.path.join(

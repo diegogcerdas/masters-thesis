@@ -118,7 +118,6 @@ class CLIPVisionExtractor(nn.Module):
         if mode == "train":
             x = self.train_transform(x).to(self.device)
         x = self.processor(images=x, return_tensors="pt")['pixel_values']
-        x = x.to(self.device)
         x = self.clip.get_image_features(pixel_values=x)
         x = (x - self.mean) / self.std
         return x.float()

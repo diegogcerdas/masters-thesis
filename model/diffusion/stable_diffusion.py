@@ -28,7 +28,7 @@ class StableDiffusion:
         ).to(self.device)
         self.clip = CLIPModel.from_pretrained(
             "openai/clip-vit-large-patch14", torch_dtype=self.dtype
-        )
+        ).to(self.device)
         self.tokenizer = CLIPTokenizer.from_pretrained(
             "openai/clip-vit-large-patch14", torch_dtype=self.dtype
         )

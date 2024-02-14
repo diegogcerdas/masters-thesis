@@ -17,13 +17,13 @@ if __name__ == "__main__":
     parser.add_argument("--brain-encoder-desc", type=str)
 
     # Synthesis Parameters
-    parser.add_argument("--prompt", type=str, default="a photograph")
+    parser.add_argument("--prompt", type=str, default="")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--loss-scale", type=float, default=1)
     parser.add_argument("--g", type=float, default=7.5)
     parser.add_argument("--inference-steps", type=int, default=500)
-    parser.add_argument("--iterations", type=int, default=10)
-    parser.add_argument("--learning-rate", type=float, default=1e-2)
+    parser.add_argument("--iterations", type=int, default=100)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--outputs-dir", type=str, default="./outputs/")
     parser.add_argument(
         "--device",
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     cfg.outputs_dir = os.path.join(cfg.outputs_dir, cfg.brain_encoder_desc)
 
     ldm = StableDiffusion(batch_size=1, device=cfg.device)
-    encoder = EncoderModule.load_from_checkpoint(cfg.brain_encoder_ckpt, feature_extractor=None).encoder
+    encoder = EncoderModule.load_from_checkpoint(cfg.brain_encoder_ckpt, feature_extractor=None, strict=False).encoder
 
     # Initialize gradient descent
     gradient_descent = GradientDescent(
@@ -57,6 +57,8 @@ if __name__ == "__main__":
     outputs_dir_images = os.path.join(outputs_dir_prompt, "images")
     os.makedirs(outputs_dir_images, exist_ok=True)
 
+    every_n = 10
+
     score_list = []
     for i in range(int(cfg.iterations)):
         # Zero the gradients
@@ -70,16 +72,18 @@ if __name__ == "__main__":
 
         # Append score and save image
         with torch.no_grad():
+            print(f"Iteration {i}: {score.item()}")
             score_list.append(score.item())
-            pil_image = ldm.text_emb_to_img(
-                text_embedding=gradient_descent.get_text_embedding(),
-                return_pil=True,
-                g=cfg.g,
-                seed=cfg.seed,
-                steps=cfg.inference_steps,
-            )[0]
-            filename = f"{i}_{round(score.item(), 4)}.jpg"
-            pil_image.save(os.path.join(outputs_dir_images, filename))
+            if i % every_n == 0:
+                pil_image = ldm.text_emb_to_img(
+                    text_embedding=gradient_descent.get_text_embeddings(),
+                    return_pil=True,
+                    g=cfg.g,
+                    seed=cfg.seed,
+                    steps=cfg.inference_steps,
+                )[0]
+                filename = f"{i}_{round(score.item(), 4)}.jpg"
+                pil_image.save(os.path.join(outputs_dir_images, filename))
 
         # Gradient descent step
         loss.backward()

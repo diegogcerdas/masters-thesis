@@ -9,5 +9,4 @@ plotly
 open_clip_torch
 transformers
 diffusers
-accelerate
 wandb

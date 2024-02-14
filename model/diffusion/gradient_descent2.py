@@ -27,9 +27,6 @@ class GradientDescent(torch.nn.Module):
 
     def forward(self):
         last_hidden_state = self.condition
-        pooled_output = last_hidden_state[
-            [0],
-            [self.num_tokens],
-        ]   
+        pooled_output = last_hidden_state.mean(dim=1)
         text_features = self.ldm.clip.text_projection(pooled_output)
         return text_features
