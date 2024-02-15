@@ -5,12 +5,9 @@ import torch.nn as nn
 from torch.utils import data
 from torchvision import transforms
 from tqdm import tqdm
-from model.diffusion.stable_diffusion import StableDiffusion
 
 from dataset.natural_scenes import NaturalScenesDataset
 from utils.custom_transforms import RandomSpatialOffset
-
-from transformers import CLIPModel, CLIPProcessor
 
 
 class FeatureExtractorType:
@@ -94,53 +91,3 @@ def create_feature_extractor(type: FeatureExtractorType, device: str):
     else:
         raise ValueError(f"Invalid feature extractor type: {type}")
     return feature_extractor
-    
-
-class CLIPVisionExtractor(nn.Module):
-    def __init__(self, clip: CLIPModel, processor: CLIPProcessor, ldm_name: str, device: str):
-        super().__init__()
-        self.clip = clip
-        self.feature_size = clip.vision_model.config.projection_dim
-        self.name = ldm_name
-        self.processor = processor
-        self.device = device
-
-        self.train_transform = transforms.Compose(
-            [
-                RandomSpatialOffset(offset=10),
-            ]
-        )
-
-        self.mean = 0
-        self.std = 0.5
-
-    def forward(self, x: torch.Tensor, mode: str = "val"):
-        if mode == "train":
-            x = self.train_transform(x).to(self.device)
-        x = self.processor(images=x, return_tensors="pt")['pixel_values']
-        x = self.clip.get_image_features(pixel_values=x)
-        x = (x - self.mean) / self.std
-        return x.float()
-
-    def extract_for_dataset(self, dataset: NaturalScenesDataset, batch_size: int = 8):
-        assert not dataset.return_coco_id
-        dataloader = data.DataLoader(
-            dataset,
-            batch_size=batch_size,
-            drop_last=False,
-            shuffle=False,
-        )
-        features = []
-        for batch in tqdm(
-            dataloader, total=len(dataloader), desc="Extracting features..."
-        ):
-            x = batch
-            x = x.to(self.device)
-            bs = x.shape[0]
-            x = self(x).reshape((bs, -1)).detach().cpu().numpy()
-            features.append(x)
-        features = np.concatenate(features, axis=0).astype(np.float32)
-        return features
-
-def create_feature_extractor_from_ldm(ldm: StableDiffusion, device: str):
-    return CLIPVisionExtractor(ldm.clip, ldm.processor, ldm.name, device)

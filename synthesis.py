@@ -4,7 +4,7 @@ import os
 import pytorch_lightning as pl
 import torch
 
-from model.diffusion.stable_diffusion import StableDiffusion
+from model.stable_diffusion import StableDiffusion
 from utils.configs import config_from_args
 
 if __name__ == "__main__":

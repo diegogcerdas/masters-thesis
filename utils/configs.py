@@ -25,28 +25,6 @@ class ConfigTrain:
     wandb_entity: str
     wandb_mode: str
 
-@dataclass
-class ConfigTrain2:
-    subject: int
-    roi: str
-    hemisphere: str
-    n_neighbors: int
-    distance_metric: str
-    predict_average: bool
-    data_dir: str
-    ckpt_dir: str
-    logs_dir: str
-    exp_name: str
-    seed: int
-    learning_rate: float
-    batch_size: int
-    num_workers: int
-    max_epochs: int
-    device: str
-    wandb_project: str
-    wandb_entity: str
-    wandb_mode: str
-
 
 @dataclass
 class ConfigSynthesis:
@@ -59,47 +37,11 @@ class ConfigSynthesis:
     device: str
 
 
-@dataclass
-class ConfigGuidedSynthesis:
-    brain_encoder_ckpt: str
-    brain_encoder_desc: str
-    feature_extractor_type: str
-    prompt: str
-    seed: int
-    loss_scale: float
-    g: float
-    inference_steps: int
-    iterations: int
-    learning_rate: float
-    outputs_dir: str
-    device: str
-
-@dataclass
-class ConfigGuidedSynthesis2:
-    brain_encoder_ckpt: str
-    brain_encoder_desc: str
-    prompt: str
-    seed: int
-    loss_scale: float
-    g: float
-    inference_steps: int
-    iterations: int
-    learning_rate: float
-    outputs_dir: str
-    device: str
-
-
 def config_from_args(args: dict, mode: str = "train"):
     if mode == "train":
         class_name = ConfigTrain
-    elif mode == "train2":
-        class_name = ConfigTrain2
     elif mode == "synthesis":
         class_name = ConfigSynthesis
-    elif mode == "guided_synthesis":
-        class_name = ConfigGuidedSynthesis
-    elif mode == "guided_synthesis2":
-        class_name = ConfigGuidedSynthesis2
     else:
         raise ValueError("Mode must be either 'train' or 'test'")
     return class_name(
