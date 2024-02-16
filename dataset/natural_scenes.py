@@ -1,12 +1,12 @@
 import os
 from typing import List, Union
 
-import numpy as np
 import pandas as pd
-import torch
 from PIL import Image
 from torch.utils import data
 from torchvision import transforms
+
+from utils.nsd_utils import parse_rois, get_roi_indices, load_whole_surface, get_voxel_neighborhood
 
 
 class NaturalScenesDataset(data.Dataset):
@@ -16,6 +16,8 @@ class NaturalScenesDataset(data.Dataset):
         subject: int,
         partition: str,
         roi: Union[str, List[str]] = None,
+        center_voxel: int = None,
+        n_neighbor_voxels: int = None,
         hemisphere: str = None,
         return_coco_id: bool = True,
     ):
@@ -23,8 +25,8 @@ class NaturalScenesDataset(data.Dataset):
         assert partition in ["train", "test", "debug_train", "debug_test"]
         assert subject in range(1, 9)
         if partition == "train":
-            assert roi is not None
             assert hemisphere is not None
+            assert (roi is not None) or (center_voxel is not None and n_neighbor_voxels is not None)
 
         self.root = root
         self.subject = subject
@@ -36,9 +38,17 @@ class NaturalScenesDataset(data.Dataset):
         self.split = "train" if "train" in partition else "test"
 
         if partition == "train":
-            self.rois, self.roi_classes = self.parse_roi(roi)
+            subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
+            self.fmri_data, self.fs_indices, self.fs_coords = load_whole_surface(subj_dir, hemisphere)
             self.hemisphere = hemisphere
-            self.fmri_data = self.load_fmri_data()
+            self.roi_indices = []
+            if roi is not None:
+                if isinstance(roi, str): roi = [roi]
+                roi_names, roi_classes = parse_rois(roi)
+                self.roi_indices += get_roi_indices(subj_dir, roi_names, roi_classes, hemisphere)
+            if center_voxel is not None and n_neighbor_voxels is not None:
+                self.roi_indices += get_voxel_neighborhood(self.fs_indices, self.fs_coords, center_voxel, n_neighbor_voxels)
+            self.roi_indices = sorted(list(set(self.roi_indices)))
 
     def __len__(self):
         return self.df.shape[0]
@@ -48,95 +58,13 @@ class NaturalScenesDataset(data.Dataset):
         img = Image.open(os.path.join(self.root, self.df.iloc[idx]["filename"]))
         img = transforms.ToTensor()(img)
         if self.partition == "train":
-            activation = self.fmri_data[idx]
+            activation = self.fmri_data[idx, self.roi_indices]
             if self.return_coco_id:
                 return img, activation, coco_id
             return img, activation
         if self.return_coco_id:
             return img, coco_id
         return img
-
-    def load_fmri_data(self):
-        subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
-        fmri_dir = os.path.join(subj_dir, "training_split", "training_fmri")
-        fmri = np.load(
-            os.path.join(fmri_dir, f"{self.hemisphere[0]}h_training_fmri.npy")
-        )
-        fmri_mask = np.zeros(fmri.shape[1])
-        for roi_, roi_class_ in zip(self.rois, self.roi_classes):
-            roi_class_dir = os.path.join(
-                subj_dir,
-                "roi_masks",
-                f"{self.hemisphere[0]}h.{roi_class_}_challenge_space.npy",
-            )
-            roi_map_dir = os.path.join(
-                subj_dir, "roi_masks", f"mapping_{roi_class_}.npy"
-            )
-            roi_class_npy = np.load(roi_class_dir)
-            roi_map = np.load(roi_map_dir, allow_pickle=True).item()
-            roi_mapping = list(roi_map.keys())[list(roi_map.values()).index(roi_)]
-            fmri_mask += np.asarray(roi_class_npy == roi_mapping, dtype=int)
-        fmri = fmri[:, np.where(fmri_mask)[0]]
-        return torch.from_numpy(fmri).float()
-
-    def parse_roi(self, roi):
-        if roi == "prf-visualrois":
-            roi = ["V1v", "V1d", "V2v", "V2d", "V3v", "V3d", "hV4"]
-            roi_class = ["prf-visualrois"] * len(roi)
-            return roi, roi_class
-        elif roi == "floc-bodies":
-            roi = ["EBA", "FBA-1", "FBA-2", "mTL-bodies"]
-            roi_class = ["floc-bodies"] * len(roi)
-            return roi, roi_class
-        elif roi == "floc-faces":
-            roi = ["OFA", "FFA-1", "FFA-2", "mTL-faces", "aTL-faces"]
-            roi_class = ["floc-faces"] * len(roi)
-            return roi, roi_class
-        elif roi == "floc-places":
-            roi = ["OPA", "PPA", "RSC"]
-            roi_class = ["floc-places"] * len(roi)
-            return roi, roi_class
-        elif roi == "floc-words":
-            roi = ["OWFA", "VWFA-1", "VWFA-2", "mfs-words", "mTL-words"]
-            roi_class = ["floc-words"] * len(roi)
-            return roi, roi_class
-        elif roi == "streams":
-            roi = [
-                "early",
-                "midventral",
-                "midlateral",
-                "midparietal",
-                "ventral",
-                "lateral",
-                "parietal",
-            ]
-            roi_class = ["streams"] * len(roi)
-            return roi, roi_class
-        roi_class = []
-        for roi_ in roi:
-            if roi_ in ["V1v", "V1d", "V2v", "V2d", "V3v", "V3d", "hV4"]:
-                roi_class.append("prf-visualrois")
-            elif roi_ in ["EBA", "FBA-1", "FBA-2", "mTL-bodies"]:
-                roi_class.append("floc-bodies")
-            elif roi_ in ["OFA", "FFA-1", "FFA-2", "mTL-faces", "aTL-faces"]:
-                roi_class.append("floc-faces")
-            elif roi_ in ["OPA", "PPA", "RSC"]:
-                roi_class.append("floc-places")
-            elif roi_ in ["OWFA", "VWFA-1", "VWFA-2", "mfs-words", "mTL-words"]:
-                roi_class.append("floc-words")
-            elif roi_ in [
-                "early",
-                "midventral",
-                "midlateral",
-                "midparietal",
-                "ventral",
-                "lateral",
-                "parietal",
-            ]:
-                roi_class.append("streams")
-            else:
-                raise ValueError("Invalid ROI")
-        return roi, roi_class
 
     def build_image_info_df(self):
         subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")

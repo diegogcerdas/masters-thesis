@@ -33,7 +33,7 @@ class NSDInducedDataset(data.Dataset):
         self.batch_size_feature_extraction = batch_size_feature_extraction
         self.D = self.load_distance_matrix(feature_extractor, metric)
         self.targets, self.targets_mean, self.targets_std = self.compute_targets(self.D)
-        self.target_size = 1 if predict_average else nsd.fmri_data.shape[1]
+        self.target_size = 1 if predict_average else len(nsd.roi_indices)
         self.low_dim = self.compute_low_dim(self.D)
 
     def __len__(self):
@@ -70,7 +70,7 @@ class NSDInducedDataset(data.Dataset):
         targets = []
         for i in tqdm(range(len(self)), desc="Computing targets..."):
             closest = np.argsort(distance_matrix[i, :])[: self.n_neighbors + 1]
-            acts = self.nsd.fmri_data[closest].mean(axis=0)
+            acts = self.nsd.fmri_data[closest, self.nsd.roi_indices].mean(axis=0)
             if self.predict_average:
                 acts = acts.mean().item()
             targets.append(acts)
