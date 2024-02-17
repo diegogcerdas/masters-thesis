@@ -22,6 +22,7 @@ class NSDInducedDataset(data.Dataset):
         n_neighbors: int,
         seed: int,
         batch_size_feature_extraction: int = 32,
+        keep_features: bool = False,
     ):
         super().__init__()
         assert nsd.partition == "train"
@@ -31,7 +32,9 @@ class NSDInducedDataset(data.Dataset):
         self.n_neighbors = n_neighbors
         self.seed = seed
         self.batch_size_feature_extraction = batch_size_feature_extraction
-        self.D = self.load_distance_matrix(feature_extractor, metric)
+        self.features = self.load_features(feature_extractor).astype(np.float32)
+        self.D = self.load_distance_matrix(self.features, feature_extractor.name, metric)
+        if not keep_features: del self.features
         self.targets, self.targets_mean, self.targets_std = self.compute_targets(self.D)
         self.target_size = 1 if predict_average else len(nsd.roi_indices)
         self.low_dim = self.compute_low_dim(self.D)
@@ -45,19 +48,33 @@ class NSDInducedDataset(data.Dataset):
         target = self.targets[idx].squeeze().float()
         low_dim = self.low_dim[idx]
         return img, target, low_dim
-
-    def load_distance_matrix(self, feature_extractor, metric):
+    
+    def load_features(self, feature_extractor):
         folder = os.path.join(
-            self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "distance"
+            self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "features"
         )
-        f = os.path.join(folder, f"{feature_extractor.name}_{metric}.npy")
+        f = os.path.join(folder, f"{feature_extractor.name}.npy")
         if not os.path.exists(f):
-            print("Computing distance matrix...")
+            print("Computing features...")
             self.nsd.partition = "debug_train"
             features = feature_extractor.extract_for_dataset(
                 self.nsd, self.batch_size_feature_extraction
             )
             self.nsd.partition = "train"
+            os.makedirs(folder, exist_ok=True)
+            np.save(f, features)
+            print("Done.")
+        else:
+            features = np.load(f)
+        return features
+
+    def load_distance_matrix(self, features, feature_extractor_type, metric):
+        folder = os.path.join(
+            self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "distance"
+        )
+        f = os.path.join(folder, f"{feature_extractor_type}_{metric}.npy")
+        if not os.path.exists(f):
+            print("Computing distance matrix...")
             D = pairwise_distances(features, metric=metric).astype(np.float32)
             os.makedirs(folder, exist_ok=True)
             np.save(f, D)
@@ -70,7 +87,7 @@ class NSDInducedDataset(data.Dataset):
         targets = []
         for i in tqdm(range(len(self)), desc="Computing targets..."):
             closest = np.argsort(distance_matrix[i, :])[: self.n_neighbors + 1]
-            acts = self.nsd.fmri_data[closest, self.nsd.roi_indices].mean(axis=0)
+            acts = self.nsd.fmri_data[closest][:, self.nsd.roi_indices].mean(axis=0)
             if self.predict_average:
                 acts = acts.mean().item()
             targets.append(acts)

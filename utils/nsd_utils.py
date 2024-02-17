@@ -5,11 +5,13 @@ from nilearn.surface import load_surf_mesh
 import plotly.graph_objects as go
 import pandas as pd
 from tqdm import tqdm
+import torch
 
 def load_whole_surface(data_dir, hemisphere, dtype=np.float32):
     # Load fMRI data
     fmri_dir = os.path.join(data_dir, 'training_split', 'training_fmri')
     fmri = np.load(os.path.join(fmri_dir, f'{hemisphere[0]}h_training_fmri.npy')).astype(dtype)
+    fmri = torch.from_numpy(fmri).float()
     # Get fsaverage coordinates
     roi_dir = os.path.join(data_dir, 'roi_masks',f'{hemisphere[0]}h.all-vertices_fsaverage_space.npy')
     fsaverage_all_vertices = np.load(roi_dir).astype(np.int8)
