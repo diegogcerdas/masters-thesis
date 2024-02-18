@@ -46,6 +46,7 @@ class NSDInducedDataset(data.Dataset):
         img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
         img = transforms.ToTensor()(img)
         target = self.targets[idx].squeeze().float()
+        target = (target - self.targets_mean) / self.targets_std
         low_dim = self.low_dim[idx]
         return img, target, low_dim
     
@@ -96,7 +97,6 @@ class NSDInducedDataset(data.Dataset):
         )
         targets_mean = targets.mean()
         targets_std = targets.std()
-        targets = (targets - targets_mean) / targets_std
         return targets, targets_mean, targets_std
 
     def compute_low_dim(self, distance_matrix):
