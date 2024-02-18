@@ -36,12 +36,25 @@ class ConfigSynthesis:
     batch_size: int
     device: str
 
+@dataclass
+class ConfigSynthesis2:
+    prompt1: str
+    prompt2: str
+    steps: int
+    seed: int
+    g: float
+    inference_steps: int
+    outputs_dir: str
+    device: str
+
 
 def config_from_args(args: dict, mode: str = "train"):
     if mode == "train":
         class_name = ConfigTrain
     elif mode == "synthesis":
         class_name = ConfigSynthesis
+    elif mode == "synthesis2":
+        class_name = ConfigSynthesis2
     else:
         raise ValueError("Mode must be either 'train' or 'test'")
     return class_name(
