@@ -60,7 +60,7 @@ if __name__ == "__main__":
     cfg = config_from_args(args, mode="synthesis2")
     pl.seed_everything(cfg.seed)
 
-    ldm = StableDiffusion(batch_size=cfg.batch_size, device=cfg.device)
+    ldm = StableDiffusion(batch_size=1, device=cfg.device)
 
     imgs = []
     steps = np.linspace(0, 1, cfg.steps)
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     # Create directory for outputs
     outputs_dir_prompt = os.path.join(
-        cfg.outputs_dir, cfg.prompt.replace(" ", "_").strip()
+        cfg.outputs_dir, cfg.prompt1.replace(" ", "_").strip()
     )
     outputs_dir_images = os.path.join(outputs_dir_prompt, "images")
     os.makedirs(outputs_dir_images, exist_ok=True)
