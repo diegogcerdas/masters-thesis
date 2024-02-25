@@ -25,6 +25,37 @@ class ConfigTrain:
     wandb_entity: str
     wandb_mode: str
 
+@dataclass
+class ConfigPipeline:
+    subject: int
+    hemisphere: str
+    roi: str
+    center_voxel: int
+    n_neighbor_voxels: int
+    voxels_filename: str
+    feature_extractor_type: str
+    distance_metric: str
+    n_neighbors: int
+    neg_std_threshold: float
+    pos_std_threshold: float
+    percentage_captioned: float
+    prompt_clip_model: str
+    prompt_clip_pretrain: str
+    prompt_iterations: int
+    prompt_lr: float
+    prompt_weight_decay: float
+    prompt_prompt_len: int
+    prompt_prompt_bs: int
+    prompt_loss_weight: float
+    prompt_batch_size: int
+    prompt_print_step: int
+    prompt_print_new_best: bool
+    slerp_steps: int
+    g: float
+    inference_steps: int
+    seed: int
+    device: str
+
 
 @dataclass
 class ConfigSynthesis:
@@ -56,6 +87,8 @@ def config_from_args(args: dict, mode: str = "train"):
         class_name = ConfigSynthesis
     elif mode == "synthesis2":
         class_name = ConfigSynthesis2
+    elif mode == "pipeline":
+        class_name = ConfigPipeline
     else:
         raise ValueError("Mode must be either 'train' or 'test'")
     return class_name(
