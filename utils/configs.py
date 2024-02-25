@@ -36,6 +36,7 @@ class ConfigSynthesis:
     batch_size: int
     device: str
 
+
 @dataclass
 class ConfigSynthesis2:
     prompt1: str

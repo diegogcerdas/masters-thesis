@@ -1,35 +1,48 @@
 import os
+
 import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import torch
 from nilearn import datasets
 from nilearn.surface import load_surf_mesh
-import plotly.graph_objects as go
-import pandas as pd
 from tqdm import tqdm
-import torch
+
 
 def load_whole_surface(data_dir, hemisphere, dtype=np.float32):
     # Load fMRI data
-    fmri_dir = os.path.join(data_dir, 'training_split', 'training_fmri')
-    fmri = np.load(os.path.join(fmri_dir, f'{hemisphere[0]}h_training_fmri.npy')).astype(dtype)
+    fmri_dir = os.path.join(data_dir, "training_split", "training_fmri")
+    fmri = np.load(
+        os.path.join(fmri_dir, f"{hemisphere[0]}h_training_fmri.npy")
+    ).astype(dtype)
     fmri = torch.from_numpy(fmri).float()
     # Get fsaverage coordinates
-    roi_dir = os.path.join(data_dir, 'roi_masks',f'{hemisphere[0]}h.all-vertices_fsaverage_space.npy')
+    roi_dir = os.path.join(
+        data_dir, "roi_masks", f"{hemisphere[0]}h.all-vertices_fsaverage_space.npy"
+    )
     fsaverage_all_vertices = np.load(roi_dir).astype(np.int8)
-    fsaverage = datasets.fetch_surf_fsaverage('fsaverage')
-    surf_mesh = fsaverage[f'flat_{hemisphere}']
+    fsaverage = datasets.fetch_surf_fsaverage("fsaverage")
+    surf_mesh = fsaverage[f"flat_{hemisphere}"]
     fs_coords = load_surf_mesh(surf_mesh)[0][:, :2]
     # Get original voxel indices
     fs_indices = np.arange(len(fs_coords))[np.where(fsaverage_all_vertices)[0]]
     return fmri, fs_indices, fs_coords
 
+
 def get_roi_indices(data_dir, roi_names, roi_classes, hemisphere):
     indices = set()
     for roi, roi_class in zip(roi_names, roi_classes):
         # challenge_roi_class has ROI-class-specific ROI indices for all fMRI array elements
-        challenge_roi_class_dir = os.path.join(data_dir, 'roi_masks', hemisphere[0]+'h.'+roi_class+'_challenge_space.npy')
+        challenge_roi_class_dir = os.path.join(
+            data_dir,
+            "roi_masks",
+            hemisphere[0] + "h." + roi_class + "_challenge_space.npy",
+        )
         challenge_roi_class = np.load(challenge_roi_class_dir)
         # roi_map is a map from ROI indices to ROI names
-        roi_map_dir = os.path.join(data_dir, 'roi_masks', 'mapping_'+roi_class+'.npy')
+        roi_map_dir = os.path.join(
+            data_dir, "roi_masks", "mapping_" + roi_class + ".npy"
+        )
         roi_map = np.load(roi_map_dir, allow_pickle=True).item()
         # roi_mapping has the indices of the specified ROI
         roi_mapping = list(roi_map.keys())[list(roi_map.values()).index(roi)]
@@ -38,6 +51,7 @@ def get_roi_indices(data_dir, roi_names, roi_classes, hemisphere):
         indices_roi = np.where(challenge_roi)[0]
         indices.update(indices_roi)
     return sorted(list(indices))
+
 
 def parse_rois(rois):
     roi_names = []
@@ -99,40 +113,85 @@ def parse_rois(rois):
             raise ValueError("Invalid ROI")
     return roi_names, roi_classes
 
-def plot_interactive_surface(fmri, fs_indices, fs_coords, inverted_index_roi, min_x, max_x, min_y, max_y, roi_indices=None):
 
+def plot_interactive_surface(
+    fmri,
+    fs_indices,
+    fs_coords,
+    inverted_index_roi,
+    min_x,
+    max_x,
+    min_y,
+    max_y,
+    roi_indices=None,
+):
     locs = fs_coords[fs_indices]
-    fs_coords = fs_coords[(fs_coords[:, 0] > min_x) & (fs_coords[:, 0] < max_x) & (fs_coords[:, 1] > min_y) & (fs_coords[:, 1] < max_y)]
-    ind = np.where((locs[:, 0] > min_x) & (locs[:, 0] < max_x) & (locs[:, 1] > min_y) & (locs[:, 1] < max_y))[0]
+    fs_coords = fs_coords[
+        (fs_coords[:, 0] > min_x)
+        & (fs_coords[:, 0] < max_x)
+        & (fs_coords[:, 1] > min_y)
+        & (fs_coords[:, 1] < max_y)
+    ]
+    ind = np.where(
+        (locs[:, 0] > min_x)
+        & (locs[:, 0] < max_x)
+        & (locs[:, 1] > min_y)
+        & (locs[:, 1] < max_y)
+    )[0]
     if roi_indices is not None:
         ind = np.intersect1d(ind, roi_indices)
-    rois = inverted_index_roi['rois'].values[fs_indices]
+    rois = inverted_index_roi["rois"].values[fs_indices]
     data = fmri[ind]
     locs = locs[ind]
     rois = rois[ind]
 
     fig = go.Figure()
 
-    fig.update_layout(hovermode='closest', width=1000, height=1000, showlegend=False, plot_bgcolor='#888888')
-    fig.update_xaxes(minallowed=min_x-50, maxallowed=max_x+50, visible=False, showticklabels=False)
-    fig.update_yaxes(minallowed=min_y-50, maxallowed=max_y+50, visible=False, showticklabels=False)
-    fig.add_trace(go.Scatter(x=fs_coords[:, 0], y=fs_coords[:, 1], hoverinfo='skip', mode="markers", marker=dict(color='black', opacity=0.25)))
-    fig.add_trace(go.Scatter(
-        x=locs[:, 0], 
-        y=locs[:, 1], 
-        mode="markers", 
-        text=rois,
-        customdata=fs_indices[ind],
-        marker=dict(color=data, colorscale='RdBu_r', cmin=-3, cmax=3),
-        hovertemplate=
-            "<b>%{text}</b><br><br>" +
-            "FS Index: %{customdata}<br>" +
-            "Activation: %{marker.color:.4f}<br>" +
-            "<extra></extra>"
+    fig.update_layout(
+        hovermode="closest",
+        width=1000,
+        height=1000,
+        showlegend=False,
+        plot_bgcolor="#888888",
+    )
+    fig.update_xaxes(
+        minallowed=min_x - 50,
+        maxallowed=max_x + 50,
+        visible=False,
+        showticklabels=False,
+    )
+    fig.update_yaxes(
+        minallowed=min_y - 50,
+        maxallowed=max_y + 50,
+        visible=False,
+        showticklabels=False,
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=fs_coords[:, 0],
+            y=fs_coords[:, 1],
+            hoverinfo="skip",
+            mode="markers",
+            marker=dict(color="black", opacity=0.25),
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=locs[:, 0],
+            y=locs[:, 1],
+            mode="markers",
+            text=rois,
+            customdata=fs_indices[ind],
+            marker=dict(color=data, colorscale="RdBu_r", cmin=-3, cmax=3),
+            hovertemplate="<b>%{text}</b><br><br>"
+            + "FS Index: %{customdata}<br>"
+            + "Activation: %{marker.color:.4f}<br>"
+            + "<extra></extra>",
         )
     )
 
     fig.show()
+
 
 def get_voxel_neighborhood(fs_indices, fs_coords, center_voxel, n_neighbor_voxels):
     assert center_voxel in fs_indices
@@ -140,16 +199,31 @@ def get_voxel_neighborhood(fs_indices, fs_coords, center_voxel, n_neighbor_voxel
     center_coords = fs_coords[center_voxel]
     distances = np.linalg.norm(locs - center_coords, axis=1)
     sorted_indices = np.argsort(distances)
-    neighborhood = sorted_indices[:n_neighbor_voxels+1]
+    neighborhood = sorted_indices[: n_neighbor_voxels + 1]
     return sorted(neighborhood.tolist())
 
 
 def build_roi_inverted_index(data_root: str, hemisphere: int):
     inverted_index = {}
-    for roi_class in tqdm(["prf-visualrois", "floc-bodies", "floc-faces", "floc-places", "floc-words", "streams"]):
+    for roi_class in tqdm(
+        [
+            "prf-visualrois",
+            "floc-bodies",
+            "floc-faces",
+            "floc-places",
+            "floc-words",
+            "streams",
+        ]
+    ):
         # Load the ROI brain surface maps for the ROI class
-        roi_class_dir = os.path.join(data_root, 'roi_masks', hemisphere[0]+'h.'+roi_class+'_fsaverage_space.npy')
-        roi_map_dir = os.path.join(data_root, 'roi_masks', 'mapping_'+roi_class+'.npy')
+        roi_class_dir = os.path.join(
+            data_root,
+            "roi_masks",
+            hemisphere[0] + "h." + roi_class + "_fsaverage_space.npy",
+        )
+        roi_map_dir = os.path.join(
+            data_root, "roi_masks", "mapping_" + roi_class + ".npy"
+        )
         fsaverage_roi_class = np.load(roi_class_dir)
         roi_map = np.load(roi_map_dir, allow_pickle=True).item()
         # Iterate through corresponding ROIs
@@ -167,5 +241,7 @@ def build_roi_inverted_index(data_root: str, hemisphere: int):
     data = []
     for i in range(len(fsaverage_roi)):
         data.append([sorted(inverted_index.get(i, []))])
-    df = pd.DataFrame(data, columns=['rois'])
-    df.to_csv(os.path.join(data_root, f'inverted_index_roi_{hemisphere}.csv'), index=False)
+    df = pd.DataFrame(data, columns=["rois"])
+    df.to_csv(
+        os.path.join(data_root, f"inverted_index_roi_{hemisphere}.csv"), index=False
+    )

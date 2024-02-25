@@ -1,12 +1,14 @@
 import os
 from typing import List, Union
 
+import numpy as np
 import pandas as pd
 from PIL import Image
 from torch.utils import data
 from torchvision import transforms
 
-from utils.nsd_utils import parse_rois, get_roi_indices, load_whole_surface, get_voxel_neighborhood
+from utils.nsd_utils import (get_roi_indices, get_voxel_neighborhood,
+                             load_whole_surface, parse_rois)
 
 
 class NaturalScenesDataset(data.Dataset):
@@ -15,10 +17,11 @@ class NaturalScenesDataset(data.Dataset):
         root: str,
         subject: int,
         partition: str,
+        hemisphere: str = None,
         roi: Union[str, List[str]] = None,
         center_voxel: int = None,
         n_neighbor_voxels: int = None,
-        hemisphere: str = None,
+        voxel_idx: List[int] = None,
         return_coco_id: bool = True,
     ):
         super().__init__()
@@ -26,7 +29,9 @@ class NaturalScenesDataset(data.Dataset):
         assert subject in range(1, 9)
         if partition == "train":
             assert hemisphere is not None
-            assert (roi is not None) or (center_voxel is not None and n_neighbor_voxels is not None)
+            assert (roi is not None) or (
+                center_voxel is not None and n_neighbor_voxels is not None
+            )
 
         self.root = root
         self.subject = subject
@@ -39,15 +44,26 @@ class NaturalScenesDataset(data.Dataset):
 
         if partition == "train":
             subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
-            self.fmri_data, self.fs_indices, self.fs_coords = load_whole_surface(subj_dir, hemisphere)
+            self.fmri_data, self.fs_indices, self.fs_coords = load_whole_surface(
+                subj_dir, hemisphere
+            )
             self.hemisphere = hemisphere
             self.roi_indices = []
             if roi is not None:
-                if isinstance(roi, str): roi = [roi]
+                if isinstance(roi, str):
+                    roi = [roi]
                 roi_names, roi_classes = parse_rois(roi)
-                self.roi_indices += get_roi_indices(subj_dir, roi_names, roi_classes, hemisphere)
+                self.roi_indices += get_roi_indices(
+                    subj_dir, roi_names, roi_classes, hemisphere
+                )
             if center_voxel is not None and n_neighbor_voxels is not None:
-                self.roi_indices += get_voxel_neighborhood(self.fs_indices, self.fs_coords, center_voxel, n_neighbor_voxels)
+                self.roi_indices += get_voxel_neighborhood(
+                    self.fs_indices, self.fs_coords, center_voxel, n_neighbor_voxels
+                )
+            if voxel_idx is not None:
+                assert all([idx in self.fs_indices for idx in voxel_idx])
+                self.roi_indices += voxel_idx
+            assert len(self.roi_indices) > 0
             self.roi_indices = sorted(list(set(self.roi_indices)))
 
     def __len__(self):

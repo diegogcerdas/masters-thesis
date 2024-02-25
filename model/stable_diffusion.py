@@ -2,7 +2,8 @@ import torch
 from diffusers import AutoencoderKL, LMSDiscreteScheduler, UNet2DConditionModel
 from PIL import Image
 from tqdm import tqdm
-from transformers import CLIPTextModel, CLIPTokenizer, CLIPVisionModel, CLIPProcessor, CLIPModel
+from transformers import (CLIPModel, CLIPProcessor, CLIPTextModel,
+                          CLIPTokenizer, CLIPVisionModel)
 
 """
 Adapted from Github repo: webis-de/arxiv23-prompt-embedding-manipulation

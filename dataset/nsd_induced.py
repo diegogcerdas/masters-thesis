@@ -33,8 +33,11 @@ class NSDInducedDataset(data.Dataset):
         self.seed = seed
         self.batch_size_feature_extraction = batch_size_feature_extraction
         self.features = self.load_features(feature_extractor).astype(np.float32)
-        self.D = self.load_distance_matrix(self.features, feature_extractor.name, metric)
-        if not keep_features: del self.features
+        self.D = self.load_distance_matrix(
+            self.features, feature_extractor.name, metric
+        )
+        if not keep_features:
+            del self.features
         self.targets, self.targets_mean, self.targets_std = self.compute_targets(self.D)
         self.target_size = 1 if predict_average else len(nsd.roi_indices)
         self.low_dim = self.compute_low_dim(self.D)
@@ -49,7 +52,7 @@ class NSDInducedDataset(data.Dataset):
         target = (target - self.targets_mean) / self.targets_std
         low_dim = self.low_dim[idx]
         return img, target, low_dim
-    
+
     def load_features(self, feature_extractor):
         folder = os.path.join(
             self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "features"

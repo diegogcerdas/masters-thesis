@@ -1,13 +1,13 @@
 import argparse
 import os
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 
 from model.stable_diffusion import StableDiffusion
 from utils.configs import config_from_args
 
-import numpy as np
 
 def slerp(embedding1, embedding2, val):
     embedding1 = embedding1[0]
@@ -28,15 +28,20 @@ def slerp(embedding1, embedding2, val):
     res = faktor1 * embedding1 + faktor2 * embedding2
     return res
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Synthesis Parameters
     parser.add_argument(
-        "--prompt1", type=str, default="an photograph of a cooking pan with delicious food"
+        "--prompt1",
+        type=str,
+        default="an photograph of a cooking pan with delicious food",
     )
     parser.add_argument(
-        "--prompt2", type=str, default="an photograph of a two persons eating food in a kitchen"
+        "--prompt2",
+        type=str,
+        default="an photograph of a two persons eating food in a kitchen",
     )
     parser.add_argument("--steps", type=int, default=10)
     parser.add_argument("--seed", type=int, default=0)
