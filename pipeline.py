@@ -164,21 +164,23 @@ if __name__ == "__main__":
     print(f"Max-EIs mean distance: {np.mean(max_eis_dists)}")
     print(f"Min-EIs mean distance: {np.mean(min_eis_dists)}")
     print(
-        f"Max-EIs: {len(max_eis_idx)}, taking {int(len(max_eis_idx) * cfg.percentage_captioned)}"
+        f"Max-EIs: {len(max_eis_idx)}, taking {min(len(max_eis_idx), cfg.num_captioned)}"
     )
     print(
-        f"Min-EIs: {len(min_eis_idx)}, taking {int(len(min_eis_idx) * cfg.percentage_captioned)}"
+        f"Min-EIs: {len(min_eis_idx)}, taking {min(len(min_eis_idx), cfg.num_captioned)}"
     )
     max_eis_idx = np.random.choice(
-        len(max_eis_idx),
+        max_eis_idx,
         min(len(max_eis_idx), cfg.num_captioned),
         replace=False,
     )
     min_eis_idx = np.random.choice(
-        len(min_eis_idx),
+        min_eis_idx,
         min(len(min_eis_idx), cfg.num_captioned),
         replace=False,
     )
+    print(f"Max-EIs mean activation: {np.mean(y_pred[max_eis_idx])}")
+    print(f"Min-EIs mean activation: {np.mean(y_pred[min_eis_idx])}")
 
     # Group captioning
     cfg_prompt = ConfigPromptOptimization(
