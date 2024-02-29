@@ -12,6 +12,8 @@ from sentence_transformers.util import (dot_score, normalize_embeddings,
 from torch import nn
 from torchvision.transforms import Compose
 
+from tqdm import tqdm
+
 
 @dataclass
 class ConfigPromptOptimization:
@@ -81,7 +83,7 @@ def optimize_prompt_loop(
     best_sim = -torch.inf
     best_text = ""
 
-    for step in range(config.iter):
+    for step in tqdm(range(config.iter)):
         # randomly sample sample images and get features
         curr_indx = torch.randperm(len(all_target_features))
         target_features = all_target_features[curr_indx][0 : config.batch_size]

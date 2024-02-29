@@ -27,6 +27,7 @@ class ConfigTrain:
 
 @dataclass
 class ConfigPipeline:
+    data_dir: str
     subject: int
     hemisphere: str
     roi: str
@@ -38,7 +39,7 @@ class ConfigPipeline:
     n_neighbors: int
     neg_std_threshold: float
     pos_std_threshold: float
-    percentage_captioned: float
+    num_captioned: float
     prompt_clip_model: str
     prompt_clip_pretrain: str
     prompt_iterations: int
@@ -50,6 +51,7 @@ class ConfigPipeline:
     prompt_batch_size: int
     prompt_print_step: int
     prompt_print_new_best: bool
+    outputs_dir: str
     slerp_steps: int
     g: float
     inference_steps: int

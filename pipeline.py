@@ -45,12 +45,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Data Parameters
+    parser.add_argument("--data-dir", type=str, default="./data/")
     parser.add_argument("--subject", type=int, default=1)
     parser.add_argument("--hemisphere", type=str, default="right")
 
     # Three different ways to specify the ROI:
     # 1. A predefined ROI
-    parser.add_argument("--roi", type=Union[str, List[str]], default=None)
+    parser.add_argument("--roi", type=str, default=None)
     # 2. A voxel neighborhood
     parser.add_argument("--center-voxel", type=int, default=None)
     parser.add_argument("--n-neighbor-voxels", type=int, default=None)
@@ -65,22 +66,23 @@ if __name__ == "__main__":
     # Captioning Parameters
     parser.add_argument("--neg-std-threshold", type=float, default=2)
     parser.add_argument("--pos-std-threshold", type=float, default=2)
-    parser.add_argument("--percentage-captioned", type=float, default=1)
+    parser.add_argument("--num-captioned", type=int, default=50)
     parser.add_argument("--prompt-clip-model", type=str, default="ViT-L-14")
     parser.add_argument("--prompt-clip_pretrain", type=str, default="openai")
-    parser.add_argument("--prompt-iterations", type=int, default=3000)
-    parser.add_argument("--prompt-lr", type=float, default=0.1)
-    parser.add_argument("--prompt-weight-decay", type=float, default=0.1)
-    parser.add_argument("--prompt-prompt-len", type=int, default=5)
+    parser.add_argument("--prompt-iterations", type=int, default=5000)
+    parser.add_argument("--prompt-lr", type=float, default=1e-1)
+    parser.add_argument("--prompt-weight-decay", type=float, default=1e-1)
+    parser.add_argument("--prompt-prompt-len", type=int, default=16)
     parser.add_argument("--prompt-prompt-bs", type=int, default=1)
     parser.add_argument("--prompt-loss-weight", type=float, default=1)
-    parser.add_argument("--prompt-batch-size", type=int, default=-1)
-    parser.add_argument("--prompt-print-step", type=int, default=None)
+    parser.add_argument("--prompt-batch-size", type=int, default=1)
+    parser.add_argument("--prompt-print-step", type=int, default=100)
     parser.add_argument(
         "--prompt-print-new-best", action=BooleanOptionalAction, default=False
     )
 
     # Synthesis Parameters
+    parser.add_argument("--outputs-dir", type=str, default="./outputs/")
     parser.add_argument("--slerp-steps", type=int, default=25)
     parser.add_argument("--g", type=float, default=7.5)
     parser.add_argument("--inference-steps", type=int, default=100)
@@ -143,7 +145,7 @@ if __name__ == "__main__":
     print(f"R^2: {round(metric, 4)}")
 
     # RSA after Linear Regression
-    voxel_RDM = (y_pred.reshape(-1, 1) - y_pred.reshape(1, -1)).abs()
+    voxel_RDM = np.abs(y_pred.reshape(-1, 1) - y_pred.reshape(1, -1))
     voxel_RDM = voxel_RDM[idx[0], idx[1]]
     r = spearmanr(voxel_RDM, rep_RDM).statistic
     print(f"RSA after Linear Regression: {round(r, 4)}")
@@ -169,12 +171,12 @@ if __name__ == "__main__":
     )
     max_eis_idx = np.random.choice(
         len(max_eis_idx),
-        int(len(max_eis_idx) * cfg.percentage_captioned),
+        min(len(max_eis_idx), cfg.num_captioned),
         replace=False,
     )
     min_eis_idx = np.random.choice(
         len(min_eis_idx),
-        int(len(min_eis_idx) * cfg.percentage_captioned),
+        min(len(min_eis_idx), cfg.num_captioned),
         replace=False,
     )
 
@@ -237,10 +239,16 @@ if __name__ == "__main__":
         # Predict activation
         img = transforms.ToTensor()(img)
         feats = feature_extractor(img.unsqueeze(0).to(cfg.device))
-        activation = reg.predict(feats.cpu().detach().numpy())
+        activation = reg.predict(feats.cpu().detach().numpy())[0]
         activations.append(activation)
 
     # Save images
     os.makedirs(cfg.outputs_dir, exist_ok=True)
+    os.makedirs(os.path.join(cfg.outputs_dir, "max"), exist_ok=True)
+    os.makedirs(os.path.join(cfg.outputs_dir, "min"), exist_ok=True)
     for i, img in enumerate(imgs):
-        img.save(os.path.join(cfg.outputs_dir, f"{i}_{round(activations[i], 4)}.png"))
+        img.save(os.path.join(cfg.outputs_dir, f"{i}_{np.round(activations[i].astype(np.float32), 4)}.png"))
+    for i, img in enumerate(max_eis_target_images):
+        img.save(os.path.join(cfg.outputs_dir, "max", f"{i}.png"))
+    for i, img in enumerate(min_eis_target_images):
+        img.save(os.path.join(cfg.outputs_dir, "min", f"{i}.png"))
