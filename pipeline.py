@@ -76,10 +76,6 @@ if __name__ == "__main__":
     parser.add_argument("--prompt-prompt-bs", type=int, default=1)
     parser.add_argument("--prompt-loss-weight", type=float, default=1)
     parser.add_argument("--prompt-batch-size", type=int, default=1)
-    parser.add_argument("--prompt-print-step", type=int, default=100)
-    parser.add_argument(
-        "--prompt-print-new-best", action=BooleanOptionalAction, default=False
-    )
 
     # Synthesis Parameters
     parser.add_argument("--outputs-dir", type=str, default="./outputs/")
@@ -191,8 +187,6 @@ if __name__ == "__main__":
         prompt_bs=cfg.prompt_prompt_bs,
         loss_weight=cfg.prompt_loss_weight,
         batch_size=cfg.prompt_batch_size,
-        print_step=cfg.prompt_print_step,
-        print_new_best=cfg.prompt_print_new_best,
     )
     clip_model, _, clip_preprocess = open_clip.create_model_and_transforms(
         cfg.prompt_clip_model, pretrained=cfg.prompt_clip_pretrain, device=cfg.device

@@ -49,8 +49,6 @@ class ConfigPipeline:
     prompt_prompt_bs: int
     prompt_loss_weight: float
     prompt_batch_size: int
-    prompt_print_step: int
-    prompt_print_new_best: bool
     outputs_dir: str
     slerp_steps: int
     g: float
