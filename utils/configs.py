@@ -81,20 +81,31 @@ class ConfigSynthesis2:
 
 @dataclass
 class ConfigLora:
+    data_dir: str
+    subject: int
+    hemisphere: str
+    outputs_dir: str
+    roi: str
+    center_voxel: int
+    n_neighbor_voxels: int
+    voxels_filename: str
+    feature_extractor_type: str
+    distance_metric: str
+    n_neighbors: int
+    pos_std_threshold: float
+    num_captioned: int
     pretrained_path: str
-    instance_data_dir: str
     instance_prompt: str
     validation_prompt: str
+    max_train_epochs: int
     num_validation_images: int
     validation_epochs: int
-    output_dir: str
-    seed: int
     train_text_encoder: bool
     batch_size: int
-    max_train_epochs: int
     learning_rate: float
     lr_scheduler: str
     num_workers: int
+    seed: int
     device: str
 
 

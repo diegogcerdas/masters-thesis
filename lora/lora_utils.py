@@ -15,9 +15,9 @@ def log_validation(
     pipeline,
     pipeline_args,
     save_dir,
-    epoch,
     device,
     seed,
+    epoch=None,
 ):
     print(f"Running validation...\nGenerating {num_validation_images} images with prompt: {validation_prompt}")
     
@@ -41,7 +41,10 @@ def log_validation(
             images.append(image)
 
     # Save images
-    save_dir = os.path.join(save_dir, f"epoch_{epoch}")
+    if epoch is not None:
+        save_dir = os.path.join(save_dir, f"epoch_{epoch}")
+    else:
+        save_dir = os.path.join(save_dir, "final")
     os.makedirs(save_dir, exist_ok=True)
     for i, img in enumerate(images):
         img.save(os.path.join(save_dir, f"{i}.png"))

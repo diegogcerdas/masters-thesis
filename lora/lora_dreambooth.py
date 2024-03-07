@@ -19,7 +19,7 @@ from diffusers.utils import (
     convert_state_dict_to_diffusers,
 )
 from transformers import CLIPTextModel
-from lora_utils import DreamBoothDataset, collate_fn, encode_prompt, log_validation
+from lora.lora_utils import DreamBoothDataset, collate_fn, encode_prompt, log_validation
 from torch.utils import data
 
 def run(
@@ -198,7 +198,7 @@ def run(
                 text_encoder=text_encoder,
                 torch_dtype=weight_dtype,
             )
-            pipeline_args = {"prompt": args_validation_prompt}
+            pipeline_args = {"prompt": args_validation_prompt, "num_inference_steps": 100}
 
             log_validation(
                 args_num_validation_images,
@@ -206,7 +206,6 @@ def run(
                 pipeline,
                 pipeline_args,
                 args_output_dir,
-                epoch,
                 args_device,
                 args_seed,
             )
@@ -240,16 +239,16 @@ def run(
 
     # run inference
     if args_validation_prompt and args_num_validation_images > 0:
-        pipeline_args = {"prompt": args_validation_prompt, "num_inference_steps": 25}
+        pipeline_args = {"prompt": args_validation_prompt, "num_inference_steps": 500}
         log_validation(
                 args_num_validation_images,
                 args_validation_prompt,
                 pipeline,
                 pipeline_args,
                 args_output_dir,
-                epoch,
                 args_device,
                 args_seed,
+                epoch,
         )
         del pipeline
         torch.cuda.empty_cache()
