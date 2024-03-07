@@ -95,6 +95,7 @@ class ConfigLora:
     learning_rate: float
     lr_scheduler: str
     num_workers: int
+    device: str
 
 
 def config_from_args(args: dict, mode: str = "train"):

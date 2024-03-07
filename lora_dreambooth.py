@@ -132,7 +132,7 @@ def run(
         for batch in train_dataloader:
 
             # Prepare model input
-            pixel_values = batch["pixel_values"].to(dtype=weight_dtype)
+            pixel_values = batch["pixel_values"].to(dtype=weight_dtype).to(args_device)
             model_input = vae.encode(pixel_values).latent_dist.sample()
             model_input = model_input * vae.config.scaling_factor
 
@@ -154,7 +154,7 @@ def run(
             encoder_hidden_states = encode_prompt(
                 text_encoder,
                 batch["input_ids"],
-            )
+            ).to(args_device)
 
             if unet.config.in_channels == channels * 2:
                 noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
