@@ -5,7 +5,7 @@ logs/
 outputs/
 __pycache__/
 wandb/
-test.ipynb
+test*.ipynb
 *.job
 *.out
 cache/

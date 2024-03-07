@@ -79,6 +79,23 @@ class ConfigSynthesis2:
     outputs_dir: str
     device: str
 
+@dataclass
+class ConfigLora:
+    pretrained_path: str
+    instance_data_dir: str
+    instance_prompt: str
+    validation_prompt: str
+    num_validation_images: int
+    validation_epochs: int
+    output_dir: str
+    seed: int
+    train_text_encoder: bool
+    batch_size: int
+    max_train_epochs: int
+    learning_rate: float
+    lr_scheduler: str
+    num_workers: int
+
 
 def config_from_args(args: dict, mode: str = "train"):
     if mode == "train":
@@ -89,6 +106,8 @@ def config_from_args(args: dict, mode: str = "train"):
         class_name = ConfigSynthesis2
     elif mode == "pipeline":
         class_name = ConfigPipeline
+    elif mode == "lora":
+        class_name = ConfigLora
     else:
         raise ValueError("Mode must be either 'train' or 'test'")
     return class_name(
