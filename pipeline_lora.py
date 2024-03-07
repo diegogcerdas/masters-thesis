@@ -52,11 +52,11 @@ if __name__ == "__main__":
 
     # LoRA Parameters
     parser.add_argument("--pretrained_path", type=str, default="runwayml/stable-diffusion-v1-5")
-    parser.add_argument("--instance_prompt", type=str, default="<br41n>")
-    parser.add_argument("--validation_prompt", type=str, default="<br41n>")
-    parser.add_argument("--max_train_epochs", type=int, default=100)
-    parser.add_argument("--num_validation_images", type=int, default=50)
-    parser.add_argument("--validation_epochs", type=int, default=20)
+    parser.add_argument("--instance_prompt", type=str, default="<dgcmt>")
+    parser.add_argument("--validation_prompt", type=str, default="<dgcmt>")
+    parser.add_argument("--max_train_epochs", type=int, default=50)
+    parser.add_argument("--num_validation_images", type=int, default=20)
+    parser.add_argument("--validation_epochs", type=int, default=10)
     parser.add_argument("--train_text_encoder", action=BooleanOptionalAction, default=True)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
@@ -174,15 +174,21 @@ if __name__ == "__main__":
     # Predict activations
     data = []
     for folder in os.listdir(lora_dir):
+        # Skip non-folders
+        if not os.path.isdir(os.path.join(lora_dir, folder)):
+            continue
         acts = []
         for file in os.listdir(os.path.join(lora_dir, folder)):
             img = Image.open(os.path.join(lora_dir, folder, file))
             img = transforms.ToTensor()(img)
+            if img.sum() == 0:
+                acts.append(np.nan)
+                continue
             feats = feature_extractor(img.unsqueeze(0).to(cfg.device))
             activation = reg.predict(feats.cpu().detach().numpy())[0]
             acts.append(activation)
         data.append((folder, acts))
-        print(f"{folder}: mean {np.mean(acts)}, std {np.std(acts)}")
+        print(f"{folder}: mean {np.nanmean(acts)}, std {np.nanstd(acts)}")
     df = pd.DataFrame(data, columns=["folder", "activations"])
     df.to_csv(os.path.join(lora_dir, "activations.csv"), index=False)
 

@@ -208,6 +208,7 @@ def run(
                 args_output_dir,
                 args_device,
                 args_seed,
+                epoch,
             )
 
             del pipeline
@@ -239,7 +240,7 @@ def run(
 
     # run inference
     if args_validation_prompt and args_num_validation_images > 0:
-        pipeline_args = {"prompt": args_validation_prompt, "num_inference_steps": 500}
+        pipeline_args = {"prompt": args_validation_prompt, "num_inference_steps": 100}
         log_validation(
                 args_num_validation_images,
                 args_validation_prompt,
@@ -248,7 +249,7 @@ def run(
                 args_output_dir,
                 args_device,
                 args_seed,
-                epoch,
+                
         )
         del pipeline
         torch.cuda.empty_cache()
