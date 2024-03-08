@@ -101,8 +101,12 @@ class ConfigLora:
     num_validation_images: int
     validation_epochs: int
     train_text_encoder: bool
+    inference_steps: int
+    resolution: int
+    rank: int
     batch_size: int
     learning_rate: float
+    max_grad_norm: float
     lr_scheduler: str
     num_workers: int
     seed: int
