@@ -6,21 +6,17 @@ import pytorch_lightning as pl
 from peft import LoraConfig
 from peft.utils import get_peft_model_state_dict
 from tqdm.auto import tqdm
-from transformers import AutoTokenizer
-from diffusers import (
-    AutoencoderKL,
-    DDPMScheduler,
-    DiffusionPipeline,
-    UNet2DConditionModel,
-)
+from diffusers import DiffusionPipeline
 from diffusers.loaders import LoraLoaderMixin
 from diffusers.optimization import get_scheduler
 from diffusers.utils import (
     convert_state_dict_to_diffusers,
 )
-from transformers import CLIPTextModel
-from lora.lora_utils import DreamBoothDataset, collate_fn, encode_prompt, log_validation
+
 from torch.utils import data
+
+from model.stable_diffusion import StableDiffusion
+from dataset.dreambooth import DreamBoothDataset
 
 def run(
     args_pretrained_model_name_or_path: str,  # Path to pretrained model or model identifier from huggingface.co/models.
@@ -35,13 +31,8 @@ def run(
     args_train_batch_size: int,  # Batch size for training.
     args_max_train_epochs: int,  # Number of training steps.
     args_learning_rate: float,  # The learning rate for the optimizer.
-    args_lr_scheduler: str,  # The scheduler type to use. Choose between ["linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"].
     args_dataloader_num_workers: int,  # Number of subprocesses to use for data loading. 0 means that the data will be loaded in the main process.
     args_rank: int = 4,  # The dimension of the LoRA update matrices.
-    args_adam_beta1: float = 0.9,  # The beta1 hyperparameter for the Adam optimizer.
-    args_adam_beta2: float = 0.999,  # The beta2 hyperparameter for the Adam optimizer.
-    args_adam_weight_decay: float = 1e-2,  # The weight decay hyperparameter for the Adam optimizer.
-    args_adam_epsilon: float = 1e-8,  # The epsilon hyperparameter for the Adam optimizer.
     args_resolution: int = 512,  # The resolution of the images.
     args_max_grad_norm: float = 1.0,  # Maximum gradient norm for clipping.
     args_device: str = "cuda",  # The device to use for training.
@@ -50,23 +41,12 @@ def run(
     pl.seed_everything(args_seed)
     os.makedirs(args_output_dir, exist_ok=True)
 
-    # Load scheduler, tokenizer, and models
-    noise_scheduler = DDPMScheduler.from_pretrained(args_pretrained_model_name_or_path, subfolder="scheduler")
-    tokenizer = AutoTokenizer.from_pretrained(args_pretrained_model_name_or_path, subfolder="tokenizer")
-    text_encoder = CLIPTextModel.from_pretrained(args_pretrained_model_name_or_path, subfolder="text_encoder")
-    vae = AutoencoderKL.from_pretrained(args_pretrained_model_name_or_path, subfolder="vae")
-    unet = UNet2DConditionModel.from_pretrained(args_pretrained_model_name_or_path, subfolder="unet")
+    ldm = StableDiffusion(args_pretrained_model_name_or_path, device=args_device)
 
     # We only train the additional adapter LoRA layers
-    vae.requires_grad_(False)
-    text_encoder.requires_grad_(False)
-    unet.requires_grad_(False)
-
-    # Move unet, vae and text_encoder to device and cast to weight_dtype
-    weight_dtype = torch.float32
-    unet.to(args_device, dtype=weight_dtype)
-    vae.to(args_device, dtype=weight_dtype)
-    text_encoder.to(args_device, dtype=weight_dtype)
+    ldm.vae.requires_grad_(False)
+    ldm.text_encoder.requires_grad_(False)
+    ldm.unet.requires_grad_(False)
 
     # Now we will add new LoRA weights to the attention layers
     unet_lora_config = LoraConfig(
@@ -75,7 +55,7 @@ def run(
         init_lora_weights="gaussian",
         target_modules=["to_k", "to_q", "to_v", "to_out.0", "add_k_proj", "add_v_proj"],
     )
-    unet.add_adapter(unet_lora_config)
+    ldm.unet.add_adapter(unet_lora_config)
 
     # The text encoder comes from 🤗 transformers, we will also attach adapters to it.
     if args_train_text_encoder:
@@ -85,25 +65,22 @@ def run(
             init_lora_weights="gaussian",
             target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
         )
-        text_encoder.add_adapter(text_lora_config)
+        ldm.text_encoder.add_adapter(text_lora_config)
 
     # Optimizer creation
-    params_to_optimize = list(filter(lambda p: p.requires_grad, unet.parameters()))
+    params_to_optimize = list(filter(lambda p: p.requires_grad, ldm.unet.parameters()))
     if args_train_text_encoder:
-        params_to_optimize = params_to_optimize + list(filter(lambda p: p.requires_grad, text_encoder.parameters()))
+        params_to_optimize = params_to_optimize + list(filter(lambda p: p.requires_grad, ldm.text_encoder.parameters()))
     optimizer = torch.optim.AdamW(
         params_to_optimize,
         lr=args_learning_rate,
-        betas=(args_adam_beta1, args_adam_beta2),
-        weight_decay=args_adam_weight_decay,
-        eps=args_adam_epsilon,
     )
 
     # Dataset and DataLoaders creation:
     train_dataset = DreamBoothDataset(
         instance_data_root=args_instance_data_dir,
         instance_prompt=args_instance_prompt,
-        tokenizer=tokenizer,
+        tokenizer=ldm.tokenizer,
         size=args_resolution,
     )
 
@@ -111,30 +88,23 @@ def run(
         train_dataset,
         batch_size=args_train_batch_size,
         shuffle=True,
-        collate_fn=lambda examples: collate_fn(examples),
         num_workers=args_dataloader_num_workers,
-    )
-
-    # Scheduler and math around the number of training steps.
-    num_update_steps_per_epoch = len(train_dataloader)
-    lr_scheduler = get_scheduler(
-        args_lr_scheduler,
-        optimizer=optimizer,
-        num_training_steps=args_max_train_epochs * num_update_steps_per_epoch,
     )
 
     for epoch in tqdm(range(args_max_train_epochs)):
 
-        unet.train()
+        ldm.unet.train()
         if args_train_text_encoder:
-            text_encoder.train()
+            ldm.text_encoder.train()
 
         for batch in train_dataloader:
 
+            input_ids = torch.cat([ldm.tokenize_prompt(args_instance_prompt).input_ids for _ in batch], dim=0)
+
             # Prepare model input
-            pixel_values = batch["pixel_values"].to(dtype=weight_dtype).to(args_device)
-            model_input = vae.encode(pixel_values).latent_dist.sample()
-            model_input = model_input * vae.config.scaling_factor
+            pixel_values = batch.to(args_device)
+            model_input = ldm.vae.encode(pixel_values).latent_dist.sample()
+            model_input = model_input * ldm.vae.config.scaling_factor
 
             # Sample noise that we'll add to the latents
             noise = torch.randn_like(model_input)
@@ -142,25 +112,24 @@ def run(
 
             # Sample a random timestep for each image
             timesteps = torch.randint(
-                0, noise_scheduler.config.num_train_timesteps, (bsz,), device=model_input.device
+                0, ldm.noise_scheduler.config.num_train_timesteps, (bsz,), device=model_input.device
             )
             timesteps = timesteps.long()
 
             # Add noise to the model input according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
-            noisy_model_input = noise_scheduler.add_noise(model_input, noise, timesteps)
+            noisy_model_input = ldm.noise_scheduler.add_noise(model_input, noise, timesteps)
 
             # Get the text embedding for conditioning
-            encoder_hidden_states = encode_prompt(
-                text_encoder,
-                batch["input_ids"],
+            encoder_hidden_states = ldm.encode_prompt(
+                input_ids,
             ).to(args_device)
 
-            if unet.config.in_channels == channels * 2:
+            if ldm.unet.config.in_channels == channels * 2:
                 noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
 
             # Predict the noise residual
-            model_pred = unet(
+            model_pred = ldm.unet(
                 noisy_model_input,
                 timesteps,
                 encoder_hidden_states,
@@ -174,19 +143,18 @@ def run(
                 model_pred, _ = torch.chunk(model_pred, 2, dim=1)
 
             # Get the target for loss depending on the prediction type
-            if noise_scheduler.config.prediction_type == "epsilon":
+            if ldm.noise_scheduler.config.prediction_type == "epsilon":
                 target = noise
-            elif noise_scheduler.config.prediction_type == "v_prediction":
-                target = noise_scheduler.get_velocity(model_input, noise, timesteps)
+            elif ldm.noise_scheduler.config.prediction_type == "v_prediction":
+                target = ldm.noise_scheduler.get_velocity(model_input, noise, timesteps)
             else:
-                raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
+                raise ValueError(f"Unknown prediction type {ldm.noise_scheduler.config.prediction_type}")
 
             # Compute the loss and backpropagate
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params_to_optimize, args_max_grad_norm)
             optimizer.step()
-            lr_scheduler.step()
             optimizer.zero_grad()
 
         if args_validation_prompt is not None and epoch % args_validation_epochs == 0:
@@ -194,9 +162,8 @@ def run(
             # create pipeline
             pipeline = DiffusionPipeline.from_pretrained(
                 args_pretrained_model_name_or_path,
-                unet=unet,
-                text_encoder=text_encoder,
-                torch_dtype=weight_dtype,
+                unet=ldm.unet,
+                text_encoder=ldm.text_encoder,
             )
             pipeline_args = {"prompt": args_validation_prompt, "num_inference_steps": 100}
 
@@ -215,11 +182,11 @@ def run(
             torch.cuda.empty_cache()
 
     # Save the lora layers
-    unet = unet.to(torch.float32)
-    unet_lora_state_dict = convert_state_dict_to_diffusers(get_peft_model_state_dict(unet))
+    ldm.unet = ldm.unet.to(torch.float32)
+    unet_lora_state_dict = convert_state_dict_to_diffusers(get_peft_model_state_dict(ldm.unet))
 
     if args_train_text_encoder:
-        text_encoder_state_dict = convert_state_dict_to_diffusers(get_peft_model_state_dict(text_encoder))
+        text_encoder_state_dict = convert_state_dict_to_diffusers(get_peft_model_state_dict(ldm.text_encoder))
     else:
         text_encoder_state_dict = None
 
@@ -232,7 +199,7 @@ def run(
     # Final inference
     # Load previous pipeline
     pipeline = DiffusionPipeline.from_pretrained(
-        args_pretrained_model_name_or_path, torch_dtype=weight_dtype
+        args_pretrained_model_name_or_path
     )
 
     # load attention processors

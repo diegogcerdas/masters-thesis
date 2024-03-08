@@ -1,7 +1,6 @@
 import argparse
 import torch
 from utils.configs import config_from_args
-from lora.lora_dreambooth import run
 from argparse import BooleanOptionalAction
 
 import argparse
@@ -22,6 +21,11 @@ from utils.configs import config_from_args
 
 from torchvision import transforms
 import pandas as pd
+
+from model.lora_dreambooth import LoRADreamBooth
+from dataset.dreambooth import DreamBoothDataset
+import torch.utils.data as data
+from utils.img_utils import save_images
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -58,9 +62,12 @@ if __name__ == "__main__":
     parser.add_argument("--num_validation_images", type=int, default=20)
     parser.add_argument("--validation_epochs", type=int, default=10)
     parser.add_argument("--train_text_encoder", action=BooleanOptionalAction, default=True)
+    parser.add_argument("--inference_steps", type=int, default=100)
+    parser.add_argument("--resolution", type=int, default=512)
+    parser.add_argument("--rank", type=int, default=4)
     parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
-    parser.add_argument("--lr_scheduler", type=str, default="constant")
+    parser.add_argument("--max_grad_norm", type=float, default=1.0)
     parser.add_argument("--num_workers", type=int, default=18)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
@@ -132,44 +139,61 @@ if __name__ == "__main__":
     print(f"RSA after Linear Regression: {round(r, 4)}")
 
     # Select Max-EIs
-    print(f"Activation mean: {np.mean(y_pred)}, std: {np.std(y_pred)}")
-    mean_eis = np.mean(y_pred)
-    max_eis_idx = np.where(y_pred > mean_eis + cfg.pos_std_threshold * np.std(y_pred))[0]
+    max_eis_idx = np.where(y_pred > np.mean(y_pred) + cfg.pos_std_threshold * np.std(y_pred))[0]
     max_eis_dists = dataset.D[max_eis_idx, :][:, max_eis_idx]
-    print(f"Max-EIs mean distance: {np.mean(max_eis_dists)}")
-    print(f"Max-EIs: {len(max_eis_idx)}, taking {min(len(max_eis_idx), cfg.num_captioned)}")
-    max_eis_idx = np.random.choice(
+    max_eis_idx_sample = np.random.choice(
         max_eis_idx,
         min(len(max_eis_idx), cfg.num_captioned),
         replace=False,
     )
-    print(f"Max-EIs mean activation: {np.mean(y_pred[max_eis_idx])}")
     max_eis_target_images = [
         Image.open(os.path.join(nsd.root, nsd.df.iloc[idx]["filename"]))
-        for idx in max_eis_idx
+        for idx in max_eis_idx_sample
     ]
-
+    print(f"Max-EIs activation mean: {np.mean(y_pred)}, std: {np.std(y_pred)}.")
+    print(f"Max-EIs mean distance: {np.mean(max_eis_dists)}.")
+    print(f"Number of Max-EIs: {len(max_eis_idx)}, sampled {len(max_eis_idx_sample)}.")
+    print(f"Sampled Max-EIs mean activation: {np.mean(y_pred[max_eis_idx_sample])}, std {np.std(y_pred[max_eis_idx_sample])}.")
+    
     # Save Max-EIs
-    for i, img in enumerate(max_eis_target_images):
-        img.save(os.path.join(max_dir, f"{i}.png"))
+    save_images(max_eis_target_images, max_dir)
 
-    run(
-        args_pretrained_model_name_or_path=cfg.pretrained_path,
-        args_instance_data_dir=max_dir,
-        args_instance_prompt=cfg.instance_prompt,
-        args_validation_prompt=cfg.validation_prompt,
-        args_num_validation_images=cfg.num_validation_images,
-        args_validation_epochs=cfg.validation_epochs,
-        args_output_dir=lora_dir,
-        args_seed=cfg.seed,
-        args_train_text_encoder=cfg.train_text_encoder,
-        args_train_batch_size=cfg.batch_size,
-        args_max_train_epochs=cfg.max_train_epochs,
-        args_learning_rate=cfg.learning_rate,
-        args_lr_scheduler=cfg.lr_scheduler,
-        args_dataloader_num_workers=cfg.num_workers,
-        args_device=cfg.device,
+    # Perform LoRA
+    train_dataset = DreamBoothDataset(
+        instance_data_root=max_dir,
+        size=cfg.resolution,
     )
+    train_dataloader = data.DataLoader(
+        train_dataset,
+        batch_size=cfg.batch_size,
+        shuffle=True,
+        num_workers=cfg.num_workers,
+    )
+    lora = LoRADreamBooth(
+        pretrained_model_name_or_path=cfg.pretrained_path,
+        rank=cfg.rank,
+        train_text_encoder=cfg.train_text_encoder,
+        instance_prompt=cfg.instance_prompt,
+        validation_prompt=cfg.validation_prompt,
+        num_validation_images=cfg.num_validation_images,
+        validation_epochs=cfg.validation_epochs,
+        max_train_epochs=cfg.max_train_epochs,
+        inference_steps=cfg.inference_steps,
+        output_dir=lora_dir,
+        seed=cfg.seed,
+        learning_rate=cfg.learning_rate,
+        device=cfg.device,
+    )
+    trainer = pl.Trainer(
+        accelerator="gpu" if str(cfg.device).startswith("cuda") else "cpu",
+        deterministic=True,
+        devices=1,
+        max_epochs=cfg.max_train_epochs,
+        gradient_clip_val=cfg.max_grad_norm,
+        gradient_clip_algorithm="norm",
+    )
+    # Train model
+    trainer.fit(lora, train_dataloader)
 
     # Predict activations
     data = []
@@ -178,8 +202,8 @@ if __name__ == "__main__":
         if not os.path.isdir(os.path.join(lora_dir, folder)):
             continue
         acts = []
-        for file in os.listdir(os.path.join(lora_dir, folder)):
-            img = Image.open(os.path.join(lora_dir, folder, file))
+        for i in range(cfg.num_validation_images):
+            img = Image.open(os.path.join(lora_dir, folder, f'{i}.png'))
             img = transforms.ToTensor()(img)
             if img.sum() == 0:
                 acts.append(np.nan)

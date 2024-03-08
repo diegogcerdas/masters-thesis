@@ -1,120 +1,68 @@
 import torch
-from diffusers import AutoencoderKL, LMSDiscreteScheduler, UNet2DConditionModel
-from PIL import Image
-from tqdm import tqdm
-from transformers import (CLIPModel, CLIPProcessor, CLIPTokenizer)
-
-"""
-Adapted from Github repo: webis-de/arxiv23-prompt-embedding-manipulation
-From Deckers, N., Peters, J. and Potthast, M. (2023). Manipulating Embeddings of Stable Diffusion Prompts. arxiv:2308.12059.
-"""
+from diffusers import (
+    AutoencoderKL,
+    DDPMScheduler,
+    DPMSolverMultistepScheduler,
+    UNet2DConditionModel,
+)
+from transformers import AutoTokenizer, CLIPTextModel
 
 
 class StableDiffusion:
-    def __init__(self, batch_size: int, device="cpu"):
+    def __init__(self, pretrained_model_name_or_path: str, device="cpu"):
         self.device = device
-        self.dtype = torch.float32
-        self.scheduler = LMSDiscreteScheduler(
-            beta_start=0.00085,
-            beta_end=0.012,
-            beta_schedule="scaled_linear",
-            num_train_timesteps=1000,
-        )
-        self.unet = UNet2DConditionModel.from_pretrained(
-            "CompVis/stable-diffusion-v1-4", subfolder="unet", torch_dtype=self.dtype
-        ).to(self.device)
-        self.vae = AutoencoderKL.from_pretrained(
-            "CompVis/stable-diffusion-v1-4", subfolder="vae", torch_dtype=self.dtype
-        ).to(self.device)
-        self.clip = CLIPModel.from_pretrained(
-            "openai/clip-vit-large-patch14", torch_dtype=self.dtype
-        ).to(self.device)
-        self.tokenizer = CLIPTokenizer.from_pretrained(
-            "openai/clip-vit-large-patch14", torch_dtype=self.dtype
-        )
-        self.processor = CLIPProcessor.from_pretrained(
-            "openai/clip-vit-large-patch14", torch_dtype=self.dtype
-        )
-
-        self.name = "openai-clip-vit-large-patch14"
-        self.latent_shape = (batch_size, self.unet.in_channels, 64, 64)
-
-    def text_enc(self, prompts, maxlen=None):
-        """
-        A function to take a texual prompt and convert it into embeddings
-        """
-        if maxlen is None:
-            maxlen = self.tokenizer.model_max_length
-        inp = self.tokenizer(
-            prompts,
-            padding="max_length",
-            max_length=maxlen,
+        self.noise_scheduler = DDPMScheduler.from_pretrained(pretrained_model_name_or_path, subfolder="scheduler")
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path, subfolder="tokenizer")
+        self.text_encoder = CLIPTextModel.from_pretrained(pretrained_model_name_or_path, subfolder="text_encoder").to(self.device)
+        self.vae = AutoencoderKL.from_pretrained(pretrained_model_name_or_path, subfolder="vae").to(self.device)
+        self.unet = UNet2DConditionModel.from_pretrained(pretrained_model_name_or_path, subfolder="unet").to(self.device)
+    
+    def tokenize_prompt(self, prompt, tokenizer_max_length=None):
+        if tokenizer_max_length is not None:
+            max_length = tokenizer_max_length
+        else:
+            max_length = self.tokenizer.model_max_length
+        text_inputs = self.tokenizer(
+            prompt,
             truncation=True,
+            padding="max_length",
+            max_length=max_length,
             return_tensors="pt",
         )
-
-        text_encoded = self.clip.text_model(inp.input_ids.to(self.device))[0].float()
-        return text_encoded
-
-    def latents_to_image(self, latents, return_pil=True):
-        """
-        Function to convert latents to images
-        """
-        latents = (1 / 0.18215) * latents
-        image = self.vae.decode(latents).sample
-        image = (image / 2 + 0.5).clamp(0, 1)
-        if not return_pil:
-            return image
-        image = image.detach().cpu().permute(0, 2, 3, 1).numpy()
-        images = (image * 255).round().astype("uint8")
-        pil_images = [Image.fromarray(image) for image in images]
-        return pil_images
-
-    def text_emb_to_img(
-        self, text_embedding, return_pil, initial_latents=None, g=7.5, seed=0, steps=500
-    ):
-        """
-        Diffusion process to convert input to image
-        """
-
-        if seed:
-            torch.manual_seed(seed)
-
-        # Setting number of steps in scheduler
-        self.scheduler.set_timesteps(steps)
-
-        # Setting initial latents
-        latents = (
-            torch.randn(self.latent_shape)
-            if initial_latents is None
-            else torch.clone(initial_latents)
+        return text_inputs
+    
+    def encode_prompt(self, input_ids):
+        text_input_ids = input_ids.to(self.text_encoder.device)
+        prompt_embeds = self.text_encoder(
+            text_input_ids,
+            return_dict=False,
         )
+        prompt_embeds = prompt_embeds[0]
+        return prompt_embeds
+    
+    def sample(
+        num_samples,
+        pipeline,
+        pipeline_args,
+        device,
+        seed,
+    ):
+        # If we were previously predicting a variance, we need the scheduler to ignore it
+        scheduler_args = {}
+        if "variance_type" in pipeline.scheduler.config:
+            variance_type = pipeline.scheduler.config.variance_type
+            if variance_type in ["learned", "learned_range"]:
+                variance_type = "fixed_small"
+            scheduler_args["variance_type"] = variance_type
+        pipeline.scheduler = DPMSolverMultistepScheduler.from_config(pipeline.scheduler.config, **scheduler_args)
+        pipeline = pipeline.to(device)
+        pipeline.set_progress_bar_config(disable=True)
 
-        # Adding noise to the latents
-        latents = latents.to(self.device).float() * self.scheduler.init_noise_sigma
-
-        # Iterating through defined steps
-        for i, ts in enumerate(tqdm(self.scheduler.timesteps)):
-            # We need to scale the i/p latents to match the variance
-            inp = self.scheduler.scale_model_input(torch.cat([latents] * 2), ts)
-
-            # Predicting noise residual using U-Net
-            if i < steps - 1:
-                with torch.no_grad():
-                    u, t = self.unet(
-                        inp, ts, encoder_hidden_states=text_embedding
-                    ).sample.chunk(2)
-            else:
-                u, t = self.unet(
-                    inp, ts, encoder_hidden_states=text_embedding
-                ).sample.chunk(2)
-
-            # Performing Guidance
-            pred = u + g * (t - u)
-
-            # Conditioning  the latents
-            latents = self.scheduler.step(pred, ts, latents).prev_sample
-
-        if return_pil:
-            return self.latents_to_image(latents, return_pil=True)
-        return latents
+        # Run inference
+        generator = torch.Generator(device=device).manual_seed(seed)
+        images = []
+        for _ in range(num_samples):
+            with torch.cuda.amp.autocast():
+                image = pipeline(**pipeline_args, generator=generator).images[0]
+                images.append(image)
+        return images
