@@ -107,7 +107,6 @@ class ConfigLora:
     batch_size: int
     learning_rate: float
     max_grad_norm: float
-    lr_scheduler: str
     num_workers: int
     seed: int
     device: str

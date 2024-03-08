@@ -32,7 +32,7 @@ class LoRADreamBooth(pl.LightningModule):
         super(LoRADreamBooth, self).__init__()
         self.save_hyperparameters()
         self.pretrained_model_name_or_path = pretrained_model_name_or_path
-        self.device = device
+        self.my_device = device
         self.rank = rank
         self.learning_rate = learning_rate
         self.train_text_encoder = train_text_encoder
@@ -102,7 +102,7 @@ class LoRADreamBooth(pl.LightningModule):
         input_ids = torch.cat([self.ldm.tokenize_prompt(self.instance_prompt).input_ids for _ in batch], dim=0)
         encoder_hidden_states = self.ldm.encode_prompt(
             input_ids,
-        ).to(self.device)
+        ).to(self.my_device)
 
         # Predict the noise residual
         if self.ldm.unet.config.in_channels == channels * 2:
@@ -146,7 +146,7 @@ class LoRADreamBooth(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         return self.compute_loss(batch)
     
-    def on_validation_epoch_end(self) -> None:
+    def on_train_epoch_end(self) -> None:
         if (self.current_epoch % self.validation_epochs == 0) or self.current_epoch == self.max_train_epochs - 1:
 
             pipeline = DiffusionPipeline.from_pretrained(
@@ -160,7 +160,7 @@ class LoRADreamBooth(pl.LightningModule):
                 self.num_validation_images,
                 pipeline,
                 pipeline_args,
-                self.device,
+                self.my_device,
                 self.seed,
             )
 
@@ -181,5 +181,5 @@ class LoRADreamBooth(pl.LightningModule):
                 unet_lora_layers=unet_lora_state_dict,
                 text_encoder_lora_layers=text_encoder_state_dict,
             )
-        return super().on_validation_epoch_end()
+        return super().on_train_epoch_end()
     
