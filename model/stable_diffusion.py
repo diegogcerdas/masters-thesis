@@ -41,6 +41,7 @@ class StableDiffusion:
         return prompt_embeds
     
     def sample(
+        self,
         num_samples,
         pipeline,
         pipeline_args,
