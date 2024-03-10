@@ -47,7 +47,6 @@ class NSDInducedDataset(data.Dataset):
 
     def __getitem__(self, idx):
         img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
-        img = transforms.ToTensor()(img)
         target = self.targets[idx].squeeze().float()
         target = (target - self.targets_mean) / self.targets_std
         low_dim = self.low_dim[idx]
@@ -61,10 +60,13 @@ class NSDInducedDataset(data.Dataset):
         if not os.path.exists(f):
             print("Computing features...")
             self.nsd.partition = "debug_train"
+            rtid = self.nsd.return_coco_id
+            self.nsd.return_coco_id = False
             features = feature_extractor.extract_for_dataset(
                 self.nsd, self.batch_size_feature_extraction
             )
             self.nsd.partition = "train"
+            self.nsd.return_coco_id = rtid
             os.makedirs(folder, exist_ok=True)
             np.save(f, features)
             print("Done.")
