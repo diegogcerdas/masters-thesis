@@ -16,10 +16,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--prompt", type=str, default="an oil painting of a train station"
     )
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--num_images", type=int, default=1)
     parser.add_argument("--inference-steps", type=int, default=500)
     parser.add_argument("--outputs-dir", type=str, default="./outputs/vanilla/")
-    parser.add_argument("--num_images", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--device",
         type=str,

@@ -5,11 +5,10 @@ from dataclasses import dataclass
 @dataclass
 class ConfigSynthesis:
     prompt: str
-    seed: int
-    g: float
+    num_images: int
     inference_steps: int
     outputs_dir: str
-    batch_size: int
+    seed: int
     device: str
 
 
