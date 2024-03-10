@@ -1,22 +1,23 @@
-import yaml
-from pydantic import BaseModel, root_validator
-from typing import Literal
-from transformers import AutoTokenizer, CLIPTextModel
-import torch
-from diffusers import UNet2DConditionModel
-import torch.nn as nn
-from safetensors.torch import save_file
 import os
-from typing import Optional
+from typing import Literal, Optional
+
+import torch
+import torch.nn as nn
+import yaml
+from diffusers import UNet2DConditionModel
+from pydantic import BaseModel, root_validator
+from safetensors.torch import save_file
+from transformers import AutoTokenizer, CLIPTextModel
 
 ACTION_TYPES = Literal[
     "erase",
     "enhance",
 ]
 
+
 class PromptSettings(BaseModel):  # yaml のやつ
     target: str
-    positive: str = None   # if None, target will be used
+    positive: str = None  # if None, target will be used
     unconditional: str = ""  # default is ""
     neutral: str = None  # if None, unconditional will be used
     action: ACTION_TYPES = "erase"  # default is "erase"
@@ -38,9 +39,9 @@ class PromptSettings(BaseModel):  # yaml のやつ
         if "neutral" not in keys:
             values["neutral"] = values["unconditional"]
         return values
-    
-class PromptEmbedsPair:
 
+
+class PromptEmbedsPair:
     def __init__(
         self,
         loss_fn,
@@ -55,7 +56,7 @@ class PromptEmbedsPair:
         self.positive = positive
         self.unconditional = unconditional
         self.neutral = neutral
-        
+
         self.guidance_scale = settings.guidance_scale
         self.resolution = settings.resolution
         self.dynamic_resolution = settings.dynamic_resolution
@@ -74,9 +75,8 @@ class PromptEmbedsPair:
         return self.loss_fn(
             target_latents,
             neutral_latents
-            - self.guidance_scale * (positive_latents - unconditional_latents)
+            - self.guidance_scale * (positive_latents - unconditional_latents),
         )
-    
 
     def _enhance(
         self,
@@ -89,7 +89,7 @@ class PromptEmbedsPair:
         return self.loss_fn(
             target_latents,
             neutral_latents
-            + self.guidance_scale * (positive_latents - unconditional_latents)
+            + self.guidance_scale * (positive_latents - unconditional_latents),
         )
 
     def loss(
@@ -105,9 +105,10 @@ class PromptEmbedsPair:
         else:
             raise ValueError("action must be erase or enhance")
 
+
 def load_prompts_from_yaml(path):
     with open(path, "r") as f:
-        prompt = yaml.safe_load(f) 
+        prompt = yaml.safe_load(f)
     return PromptSettings(**prompt)
 
 
@@ -121,10 +122,11 @@ TRAINING_METHODS = Literal[
     "selfattn",  # ESD-u, train only self attention layers
     "xattn",  # ESD-x, train only x attention layers
     "full",  #  train all layers
-    "xattn-strict", # q and k values
+    "xattn-strict",  # q and k values
     "noxattn-hspace",
     "noxattn-hspace-last",
 ]
+
 
 class LoRAModule(nn.Module):
     """
@@ -190,6 +192,7 @@ class LoRAModule(nn.Module):
             + self.lora_up(self.lora_down(x)) * self.multiplier * self.scale
         )
 
+
 class LoRANetwork(nn.Module):
     def __init__(
         self,
@@ -238,7 +241,11 @@ class LoRANetwork(nn.Module):
         loras = []
         names = []
         for name, module in root_module.named_modules():
-            if train_method == "noxattn" or train_method == "noxattn-hspace" or train_method == "noxattn-hspace-last":
+            if (
+                train_method == "noxattn"
+                or train_method == "noxattn-hspace"
+                or train_method == "noxattn-hspace-last"
+            ):
                 if "attn2" in name or "time_embed" in name:
                     continue
             elif train_method == "innoxattn":
@@ -258,20 +265,33 @@ class LoRANetwork(nn.Module):
                 )
             if module.__class__.__name__ in self.target_replace_modules:
                 for child_name, child_module in module.named_modules():
-                    if child_module.__class__.__name__ in ["Linear", "Conv2d", "LoRACompatibleLinear", "LoRACompatibleConv"]:
-                        if train_method == 'xattn-strict':
-                            if 'out' in child_name:
+                    if child_module.__class__.__name__ in [
+                        "Linear",
+                        "Conv2d",
+                        "LoRACompatibleLinear",
+                        "LoRACompatibleConv",
+                    ]:
+                        if train_method == "xattn-strict":
+                            if "out" in child_name:
                                 continue
-                        if train_method == 'noxattn-hspace':
-                            if 'mid_block' not in name:
+                        if train_method == "noxattn-hspace":
+                            if "mid_block" not in name:
                                 continue
-                        if train_method == 'noxattn-hspace-last':
-                            if 'mid_block' not in name or '.1' not in name or 'conv2' not in child_name:
+                        if train_method == "noxattn-hspace-last":
+                            if (
+                                "mid_block" not in name
+                                or ".1" not in name
+                                or "conv2" not in child_name
+                            ):
                                 continue
                         lora_name = self.prefix + "." + name + "." + child_name
                         lora_name = lora_name.replace(".", "_")
                         lora = LoRAModule(
-                            lora_name, child_module, self.multiplier, self.rank, self.alpha
+                            lora_name,
+                            child_module,
+                            self.multiplier,
+                            self.rank,
+                            self.alpha,
                         )
                         if lora_name not in names:
                             loras.append(lora)
@@ -319,6 +339,7 @@ class LoRANetwork(nn.Module):
 # Tokenization and encoding
 #################################################################################
 
+
 def text_tokenize(
     tokenizer: AutoTokenizer,
     prompts: list[str],
@@ -331,8 +352,10 @@ def text_tokenize(
         return_tensors="pt",
     ).input_ids
 
+
 def text_encode(text_encoder: CLIPTextModel, tokens):
     return text_encoder(tokens.to(text_encoder.device))[0]
+
 
 def encode_prompts(
     tokenizer: AutoTokenizer,

@@ -3,7 +3,7 @@ import os
 
 from tqdm import tqdm
 
-from dataset.natural_scenes import NaturalScenesDataset
+from datasets.nsd import NaturalScenesDataset
 from utils.coco_utils import coco_annotation
 
 
