@@ -27,7 +27,7 @@ def perform_lora(
 ) -> None:
     train_dataset = DreamBoothDataset(
         instance_data_root=instance_data_root,
-        size=resolution,
+        resolution=resolution,
     )
     train_dataloader = data.DataLoader(
         train_dataset,

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ConfigSynthesis:
+    pretrained_model_name_or_path: str
     prompt: str
     num_images: int
     inference_steps: int
