@@ -54,7 +54,7 @@ def predict_from_dir(
         acts = []
         filenames = [
             int(f.replace(".png", ""))
-            for f in os.listdir(os.path.join(preds_dir, folder))
+            for f in os.listdir(os.path.join(preds_dir, folder)) if f.endswith(".png")
         ]
         filenames = [
             os.path.join(preds_dir, folder, f"{f}.png") for f in sorted(filenames)

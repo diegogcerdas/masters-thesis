@@ -3,80 +3,63 @@ import open_clip
 import torch
 import torch.nn as nn
 from PIL import Image
-from torch.utils import data
-from torchvision import transforms
 from tqdm import tqdm
 
 from datasets.nsd import NaturalScenesDataset
 
 
 class FeatureExtractorType:
-    CLIP = "clip"
+    CLIP_1_5 = "clip_1_5"
+    CLIP_2_0 = "clip_2_0"
 
 
 class FeatureExtractor(nn.Module):
     feature_size = None
     name = None
 
-    def extract_for_dataset(self, dataset: NaturalScenesDataset, batch_size: int = 8):
-        assert not dataset.return_coco_id
-        dataloader = data.DataLoader(
-            dataset,
-            batch_size=batch_size,
-            drop_last=False,
-            shuffle=False,
-        )
+    def extract_for_dataset(self, dataset: NaturalScenesDataset):
         features = []
-        for batch in tqdm(
-            dataloader, total=len(dataloader), desc="Extracting features..."
-        ):
-            x = batch
-            x = x.to(self.device)
-            bs = x.shape[0]
-            x = self(x).reshape((bs, -1)).detach().cpu().numpy()
+        for i in tqdm(range(len(dataset))):
+            img, _, _ = dataset[i]
+            x = self(img).detach().cpu().numpy()
             features.append(x)
         features = np.concatenate(features, axis=0).astype(np.float32)
         return features
 
 
 class CLIPExtractor(FeatureExtractor):
-    def __init__(self, model_name: str, pretrained: str, device: str = None):
+    def __init__(self, model_name: str, pretrained: str, name: str, device: str = None):
         super().__init__()
         self.device = device
-        self.clip, _, _ = open_clip.create_model_and_transforms(
+        self.clip, _, self.transform = open_clip.create_model_and_transforms(
             model_name=model_name, pretrained=pretrained
         )
         self.feature_size = self.clip.visual.output_dim
-        self.name = "clip"
-        self.transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Resize(224, antialias=True),
-                transforms.Normalize(
-                    mean=(0.48145466, 0.4578275, 0.40821073),
-                    std=(0.26862954, 0.26130258, 0.27577711),
-                ),
-            ]
-        )
-        self.mean = 0
-        self.std = 0.5
+        self.name = name
         self.to(device)
 
     def forward(self, data: Image.Image):
         with torch.no_grad():
-            x = self.transform(data).to(self.device)
-            x = self.clip.encode_image(x)
-            x = (x - self.mean) / self.std
-        return x.float()
+            x = self.transform(data).unsqueeze(0).to(self.device)
+            x = self.clip.encode_image(x).reshape(1,-1).float()
+        return x
 
 
 def create_feature_extractor(
     type: FeatureExtractorType, device: str
 ) -> FeatureExtractor:
-    if type == FeatureExtractorType.CLIP:
+    if type == FeatureExtractorType.CLIP_1_5:
         feature_extractor = CLIPExtractor(
-            model_name="ViT-B-16",
-            pretrained="laion2b_s34b_b88k",
+            model_name="ViT-L-14",
+            pretrained="openai",
+            name="clip_1_5",
+            device=device,
+        )
+    elif type == FeatureExtractorType.CLIP_2_0:
+        feature_extractor = CLIPExtractor(
+            model_name="ViT-H-14",
+            pretrained="laion2b_s32b_b79k",
+            name="clip_2_0",
             device=device,
         )
     else:

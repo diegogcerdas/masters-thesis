@@ -22,7 +22,6 @@ class NSDFeaturesDataset(data.Dataset):
         n_neighbors: int,
         seed: int,
         device: str,
-        batch_size_feature_extraction: int = 32,
         keep_features: bool = False,
     ):
         super().__init__()
@@ -34,7 +33,6 @@ class NSDFeaturesDataset(data.Dataset):
         self.n_neighbors = n_neighbors
         self.seed = seed
         self.feats_device = device
-        self.batch_size_feature_extraction = batch_size_feature_extraction
         self.features = self.load_features()
         self.D = self.load_distance_matrix()
         if not keep_features:
@@ -63,11 +61,7 @@ class NSDFeaturesDataset(data.Dataset):
             feature_extractor = create_feature_extractor(
                 self.feature_extractor_type, self.feats_device
             )
-            self.nsd.partition = "debug_train"
-            features = feature_extractor.extract_for_dataset(
-                self.nsd, self.batch_size_feature_extraction
-            )
-            self.nsd.partition = "train"
+            features = feature_extractor.extract_for_dataset(self.nsd)
             os.makedirs(folder, exist_ok=True)
             np.save(f, features)
             print("Done.")
