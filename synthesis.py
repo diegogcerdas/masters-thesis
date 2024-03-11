@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pretrained-model-name-or-path",
         type=str,
-        default="runwayml/stable-diffusion-v1-5",
+        default="stabilityai/stable-diffusion-2",
     )
     parser.add_argument(
         "--prompt", type=str, default="an oil painting of a train station"
@@ -24,6 +24,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-images", type=int, default=1)
     parser.add_argument("--inference-steps", type=int, default=500)
     parser.add_argument("--outputs-dir", type=str, default="./outputs/vanilla/")
+    parser.add_argument("--lora-dir", type=str, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--device",
@@ -44,6 +45,8 @@ if __name__ == "__main__":
     pipeline = DiffusionPipeline.from_pretrained(
         cfg.pretrained_model_name_or_path,
     )
+    if cfg.lora_dir is not None:
+        pipeline.load_lora_weights(cfg.lora_dir, weight_name="pytorch_lora_weights.safetensors")
     pipeline_args = {
         "prompt": cfg.prompt,
         "num_inference_steps": cfg.inference_steps,

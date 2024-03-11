@@ -44,7 +44,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--pretrained-model-name-or-path",
         type=str,
-        default="runwayml/stable-diffusion-v1-5",
+        default="stabilityai/stable-diffusion-2",
     )
     parser.add_argument("--instance-prompt", type=str, default="photo of <dgcmt>")
     parser.add_argument("--validation-prompt", type=str, default="photo of <dgcmt>")
@@ -55,7 +55,7 @@ if __name__ == "__main__":
         "--train-text-encoder", action=BooleanOptionalAction, default=True
     )
     parser.add_argument("--inference-steps", type=int, default=100)
-    parser.add_argument("--resolution", type=int, default=512)
+    parser.add_argument("--resolution", type=int, default=768)
     parser.add_argument("--rank", type=int, default=4)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--learning-rate", type=float, default=1e-4)

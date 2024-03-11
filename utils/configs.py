@@ -9,6 +9,7 @@ class ConfigSynthesis:
     num_images: int
     inference_steps: int
     outputs_dir: str
+    lora_dir: str
     seed: int
     device: str
 
