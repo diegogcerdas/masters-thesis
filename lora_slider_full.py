@@ -7,8 +7,8 @@ if __name__ == "__main__":
     pretrained_model_name_or_path = "CompVis/stable-diffusion-v1-4"
     alpha=1
     rank=4
-    training_method="noxattn"
-    train_steps=1000
+    training_method="full"
+    train_steps=2500
     max_denoising_steps=50
     folder_main="./lora_slider"
     learning_rate=0.0002
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
     save_path="./lora_slider/test"
     lora_weights_path="./lora_slider/test/last.pt"
-    prompt = "an oil painting"
+    prompt = ""
     scales = [0, 1, 2, 3, 4, 5]
     start_noise = 800
 

@@ -34,8 +34,6 @@ def run_test(
     vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
 
-    noise_scheduler.set_timesteps(ddim_steps)
-
     network = LoRANetwork(
         unet,
         rank=args_rank,
@@ -48,7 +46,9 @@ def run_test(
 
     for scale in args_scales:
 
-        generator = torch.manual_seed(args_seed) 
+        noise_scheduler.set_timesteps(ddim_steps)
+
+        generator = torch.Generator(device=args_device).manual_seed(args_seed)
 
         cond_input = tokenizer(args_prompt, padding="max_length", max_length=tokenizer.model_max_length, truncation=True, return_tensors="pt")
         cond_embeddings = text_encoder(cond_input.input_ids.to(args_device))[0]

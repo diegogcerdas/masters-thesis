@@ -8,6 +8,7 @@ from PIL import Image
 from transformers import AutoTokenizer, CLIPTextModel
 
 from lora_slider_utils import (LoRANetwork, encode_prompts, get_noisy_image, predict_noise, concat_embeddings)
+from tqdm import tqdm
 
 def run_train(
     args_pretrained_model_name_or_path: str,  # Name or path of the pretrained model
@@ -52,7 +53,7 @@ def run_train(
     positive_prompt = encode_prompts(tokenizer, text_encoder, [''])
     neutral_prompt = encode_prompts(tokenizer, text_encoder, [''])
 
-    for i in range(args_train_steps):
+    for i in tqdm(range(args_train_steps)):
 
         with torch.no_grad():
             
@@ -65,10 +66,10 @@ def run_train(
             img_fs = [im_ for im_ in img_fs if ".png" in im_ or ".jpg" in im_ or ".jpeg" in im_ or ".webp" in im_]
             img_f = img_fs[random.randint(0, len(img_fs) - 1)]
 
-            img1 = Image.open(f"{args_folder_main}/{folders[0]}/{img_f}")
-            img2 = Image.open(f"{args_folder_main}/{folders[1]}/{img_f}")
+            img1 = Image.open(f"{args_folder_main}/{folders[0]}/{img_f}").resize((512, 512))
+            img2 = Image.open(f"{args_folder_main}/{folders[1]}/{img_f}").resize((512, 512))
 
-            generator = torch.manual_seed(args_seed)
+            generator = torch.Generator(device=args_device).manual_seed(args_seed)
             noisy_latents_low, noise_low = get_noisy_image(
                 img1,
                 vae,
@@ -79,7 +80,7 @@ def run_train(
             noisy_latents_low = noisy_latents_low.to(args_device)
             noise_low = noise_low.to(args_device)
 
-            generator = torch.manual_seed(args_seed)
+            generator = torch.Generator(device=args_device).manual_seed(args_seed)
             noisy_latents_high, noise_high = get_noisy_image(
                 img2,
                 vae,
