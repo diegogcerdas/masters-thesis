@@ -3,113 +3,11 @@ from typing import Literal, Optional
 
 import torch
 import torch.nn as nn
-import yaml
-from diffusers import UNet2DConditionModel
-from pydantic import BaseModel, root_validator
+from diffusers import UNet2DConditionModel, SchedulerMixin
 from safetensors.torch import save_file
 from transformers import AutoTokenizer, CLIPTextModel
-
-ACTION_TYPES = Literal[
-    "erase",
-    "enhance",
-]
-
-
-class PromptSettings(BaseModel):  # yaml のやつ
-    target: str
-    positive: str = None  # if None, target will be used
-    unconditional: str = ""  # default is ""
-    neutral: str = None  # if None, unconditional will be used
-    action: ACTION_TYPES = "erase"  # default is "erase"
-    guidance_scale: float = 1.0  # default is 1.0
-    resolution: int = 512  # default is 512
-    dynamic_resolution: bool = False  # default is False
-    batch_size: int = 1  # default is 1
-    dynamic_crops: bool = False  # default is False. only used when model is XL
-
-    @root_validator(pre=True)
-    def fill_prompts(cls, values):
-        keys = values.keys()
-        if "target" not in keys:
-            raise ValueError("target must be specified")
-        if "positive" not in keys:
-            values["positive"] = values["target"]
-        if "unconditional" not in keys:
-            values["unconditional"] = ""
-        if "neutral" not in keys:
-            values["neutral"] = values["unconditional"]
-        return values
-
-
-class PromptEmbedsPair:
-    def __init__(
-        self,
-        loss_fn,
-        target,
-        positive,
-        unconditional,
-        neutral,
-        settings,
-    ) -> None:
-        self.loss_fn = loss_fn
-        self.target = target
-        self.positive = positive
-        self.unconditional = unconditional
-        self.neutral = neutral
-
-        self.guidance_scale = settings.guidance_scale
-        self.resolution = settings.resolution
-        self.dynamic_resolution = settings.dynamic_resolution
-        self.batch_size = settings.batch_size
-        self.dynamic_crops = settings.dynamic_crops
-        self.action = settings.action
-
-    def _erase(
-        self,
-        target_latents: torch.FloatTensor,  # "van gogh"
-        positive_latents: torch.FloatTensor,  # "van gogh"
-        unconditional_latents: torch.FloatTensor,  # ""
-        neutral_latents: torch.FloatTensor,  # ""
-    ) -> torch.FloatTensor:
-        """Target latents are going not to have the positive concept."""
-        return self.loss_fn(
-            target_latents,
-            neutral_latents
-            - self.guidance_scale * (positive_latents - unconditional_latents),
-        )
-
-    def _enhance(
-        self,
-        target_latents: torch.FloatTensor,  # "van gogh"
-        positive_latents: torch.FloatTensor,  # "van gogh"
-        unconditional_latents: torch.FloatTensor,  # ""
-        neutral_latents: torch.FloatTensor,  # ""
-    ):
-        """Target latents are going to have the positive concept."""
-        return self.loss_fn(
-            target_latents,
-            neutral_latents
-            + self.guidance_scale * (positive_latents - unconditional_latents),
-        )
-
-    def loss(
-        self,
-        **kwargs,
-    ):
-        if self.action == "erase":
-            return self._erase(**kwargs)
-
-        elif self.action == "enhance":
-            return self._enhance(**kwargs)
-
-        else:
-            raise ValueError("action must be erase or enhance")
-
-
-def load_prompts_from_yaml(path):
-    with open(path, "r") as f:
-        prompt = yaml.safe_load(f)
-    return PromptSettings(**prompt)
+from diffusers import UNet2DConditionModel, SchedulerMixin
+from diffusers.image_processor import VaeImageProcessor
 
 
 #################################################################################
@@ -365,3 +263,58 @@ def encode_prompts(
     text_tokens = text_tokenize(tokenizer, prompts)
     text_embeddings = text_encode(text_encoder, text_tokens)
     return text_embeddings
+
+
+#################################################################################
+# Train utils
+#################################################################################
+
+
+@torch.no_grad()
+def get_noisy_image(
+    img,
+    vae,
+    generator,
+    scheduler: SchedulerMixin,
+    total_timesteps: int = 1000,
+):
+    vae_scale_factor = 2 ** (len(vae.config.block_out_channels) - 1)
+    image_processor = VaeImageProcessor(vae_scale_factor=vae_scale_factor)
+    image = image_processor.preprocess(img).to(vae.device)
+    init_latents = vae.encode(image).latent_dist.sample(None)
+    init_latents = vae.config.scaling_factor * init_latents
+    noise = torch.randn(init_latents.shape, generator=generator, device=vae.device)
+    timestep = scheduler.timesteps[total_timesteps:total_timesteps+1]
+    init_latents = scheduler.add_noise(init_latents, noise, timestep)
+    return init_latents, noise
+
+def predict_noise(
+    unet: UNet2DConditionModel,
+    scheduler: SchedulerMixin,
+    timestep: int,  # 現在のタイムステップ
+    latents: torch.FloatTensor,
+    text_embeddings: torch.FloatTensor,  # uncond な text embed と cond な text embed を結合したもの
+    guidance_scale=7.5,
+) -> torch.FloatTensor:
+    # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
+    latent_model_input = torch.cat([latents] * 2)
+    latent_model_input = scheduler.scale_model_input(latent_model_input, timestep)
+    # predict the noise residual
+    noise_pred = unet(
+        latent_model_input,
+        timestep,
+        encoder_hidden_states=text_embeddings,
+    ).sample
+    # perform guidance
+    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+    guided_target = noise_pred_uncond + guidance_scale * (
+        noise_pred_text - noise_pred_uncond
+    )
+    return guided_target
+
+def concat_embeddings(
+    unconditional: torch.FloatTensor,
+    conditional: torch.FloatTensor,
+    n_imgs: int = 1,
+):
+    return torch.cat([unconditional, conditional]).repeat_interleave(n_imgs, dim=0)
