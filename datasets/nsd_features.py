@@ -33,10 +33,7 @@ class NSDFeaturesDataset(data.Dataset):
         self.n_neighbors = n_neighbors
         self.seed = seed
         self.feats_device = device
-        self.features = self.load_features()
-        self.D = self.load_distance_matrix()
-        if not keep_features:
-            del self.features
+        self.D, self.features = self.load_distance_matrix(keep_features)
         self.targets, self.targets_mean, self.targets_std = self.compute_targets(self.D)
         self.target_size = 1 if predict_average else len(nsd.roi_indices)
         self.low_dim = self.compute_low_dim(self.D)
@@ -69,20 +66,22 @@ class NSDFeaturesDataset(data.Dataset):
             features = np.load(f)
         return features.astype(np.float32)
 
-    def load_distance_matrix(self):
+    def load_distance_matrix(self, keep_features: bool):
         folder = os.path.join(
             self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "distance"
         )
         f = os.path.join(folder, f"{self.feature_extractor_type}_{self.metric}.npy")
         if not os.path.exists(f):
             print("Computing distance matrix...")
-            D = pairwise_distances(self.features, metric=self.metric).astype(np.float32)
+            features = self.load_features()
+            D = pairwise_distances(features, metric=self.metric).astype(np.float32)
             os.makedirs(folder, exist_ok=True)
             np.save(f, D)
             print("Done.")
         else:
+            features = self.load_features() if keep_features else None
             D = np.load(f)
-        return D
+        return D, features
 
     def compute_targets(self, distance_matrix):
         targets = []

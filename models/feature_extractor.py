@@ -64,8 +64,8 @@ class VAEExtractor(FeatureExtractor):
 
     def forward(self, data: Image.Image):
         with torch.no_grad():
-            image = image.resize((self.resolution, self.resolution))
-            image = self.image_processor.preprocess(data).to(self.device)
+            image = data.resize((self.resolution, self.resolution))
+            image = self.image_processor.preprocess(image).to(self.device)
             latents = self.vae.encode(image).latent_dist.sample(None)
             latents = self.vae.config.scaling_factor * latents
             latents = latents.reshape(1, -1)

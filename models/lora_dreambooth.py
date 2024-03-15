@@ -156,64 +156,58 @@ class LoRADreamBooth(pl.LightningModule):
             )
 
         loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-        self.log_stat("train/loss", loss)
 
         return loss
 
-    def log_stat(self, name, stat):
-        self.log(
-            name,
-            stat,
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-            logger=True,
-        )
-
     def training_step(self, batch, batch_idx):
         return self.compute_loss(batch)
+    
+    def sample_and_save(self, save_folder):
+        pipeline = DiffusionPipeline.from_pretrained(
+            self.pretrained_model_name_or_path,
+            unet=self.ldm.unet,
+            text_encoder=self.ldm.text_encoder,
+        )
+        pipeline_args = {
+            "prompt": self.validation_prompt,
+            "num_inference_steps": self.inference_steps,
+        }
 
+        images = self.ldm.sample(
+            self.num_validation_images,
+            pipeline,
+            pipeline_args,
+            self.my_device,
+            self.seed,
+        )
+
+        unet_lora_state_dict = convert_state_dict_to_diffusers(
+            get_peft_model_state_dict(self.ldm.unet)
+        )
+
+        if self.train_text_encoder:
+            text_encoder_state_dict = convert_state_dict_to_diffusers(
+                get_peft_model_state_dict(self.ldm.text_encoder)
+            )
+        else:
+            text_encoder_state_dict = None
+
+        os.makedirs(save_folder, exist_ok=True)
+        save_images(images, save_folder)
+        LoraLoaderMixin.save_lora_weights(
+            save_directory=save_folder,
+            unet_lora_layers=unet_lora_state_dict,
+            text_encoder_lora_layers=text_encoder_state_dict,
+        )
+    
     def on_train_epoch_end(self) -> None:
-        if (
-            self.current_epoch % self.validation_epochs == 0
-        ) or self.current_epoch == self.max_train_epochs - 1:
-            pipeline = DiffusionPipeline.from_pretrained(
-                self.pretrained_model_name_or_path,
-                unet=self.ldm.unet,
-                text_encoder=self.ldm.text_encoder,
-            )
-            pipeline_args = {
-                "prompt": self.validation_prompt,
-                "num_inference_steps": self.inference_steps,
-            }
-
-            images = self.ldm.sample(
-                self.num_validation_images,
-                pipeline,
-                pipeline_args,
-                self.my_device,
-                self.seed,
-            )
-
-            unet_lora_state_dict = convert_state_dict_to_diffusers(
-                get_peft_model_state_dict(self.ldm.unet)
-            )
-
-            if self.train_text_encoder:
-                text_encoder_state_dict = convert_state_dict_to_diffusers(
-                    get_peft_model_state_dict(self.ldm.text_encoder)
-                )
-            else:
-                text_encoder_state_dict = None
-
-            save_folder = os.path.join(self.output_dir, f"epoch_{self.current_epoch}")
-            if self.current_epoch == self.max_train_epochs - 1:
-                save_folder = os.path.join(self.output_dir, "final")
-            os.makedirs(save_folder, exist_ok=True)
-            save_images(images, save_folder)
-            LoraLoaderMixin.save_lora_weights(
-                save_directory=save_folder,
-                unet_lora_layers=unet_lora_state_dict,
-                text_encoder_lora_layers=text_encoder_state_dict,
-            )
+        if self.current_epoch == self.max_train_epochs - 1:
+            save_folder = os.path.join(self.output_dir, "final")
+            self.sample_and_save(save_folder)
         return super().on_train_epoch_end()
+    
+    def on_train_epoch_start(self) -> None:
+        if self.current_epoch % self.validation_epochs == 0:
+            save_folder = os.path.join(self.output_dir, f"epoch_{self.current_epoch}")
+            self.sample_and_save(save_folder)
+        return super().on_train_epoch_start()
