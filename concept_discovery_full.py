@@ -6,7 +6,7 @@ if __name__ == "__main__":
     device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
     run(
-        args_pretrained_model_name_or_path='CompVis/stable-diffusion-v1-4',
+        args_pretrained_model_name_or_path='runwayml/stable-diffusion-v1-5',
         args_seed=0,
         args_train_data_dir='./concept_discovery/data',
         args_resolution=512,
