@@ -11,3 +11,4 @@ test*.ipynb
 cache/
 lightning_logs/
 lora_slider/
+concept_discovery/
