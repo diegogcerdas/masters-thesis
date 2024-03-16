@@ -7,69 +7,7 @@ import torch.nn.functional as F
 import bisect
 import lpips
 
-class StoreProcessor():
-    def __init__(self, original_processor, value_dict, name):
-        self.original_processor = original_processor
-        self.value_dict = value_dict
-        self.name = name
-        self.value_dict[self.name] = dict()
-        self.id = 0
-
-    def __call__(self, attn, hidden_states, *args, encoder_hidden_states=None, attention_mask=None, **kwargs):
-        # Is self attention
-        if encoder_hidden_states is None:
-            self.value_dict[self.name][self.id] = hidden_states.detach()
-            self.id += 1
-        res = self.original_processor(attn, hidden_states, *args,
-                                      encoder_hidden_states=encoder_hidden_states,
-                                      attention_mask=attention_mask,
-                                      **kwargs)
-
-        return res
-    
-class LoadProcessor():
-    def __init__(self, original_processor, name, img0_dict, img1_dict, alpha, beta=0, lamd=0.6):
-        super().__init__()
-        self.original_processor = original_processor
-        self.name = name
-        self.img0_dict = img0_dict
-        self.img1_dict = img1_dict
-        self.alpha = alpha
-        self.beta = beta
-        self.lamd = lamd
-        self.id = 0
-
-    def __call__(self, attn, hidden_states, *args, encoder_hidden_states=None, attention_mask=None, **kwargs):
-        # Is self attention
-        if encoder_hidden_states is None:
-            if self.id < 50 * self.lamd:
-                map0 = self.img0_dict[self.name][self.id]
-                map1 = self.img1_dict[self.name][self.id]
-                cross_map = self.beta * hidden_states + \
-                    (1 - self.beta) * ((1 - self.alpha) * map0 + self.alpha * map1)
-
-                res = self.original_processor(attn, hidden_states, *args,
-                                              encoder_hidden_states=cross_map,
-                                              attention_mask=attention_mask,
-                                              **kwargs)
-            else:
-                res = self.original_processor(attn, hidden_states, *args,
-                                              encoder_hidden_states=encoder_hidden_states,
-                                              attention_mask=attention_mask,
-                                              **kwargs)
-
-            self.id += 1
-            if self.id == len(self.img0_dict[self.name]):
-                self.id = 0
-        else:
-            res = self.original_processor(attn, hidden_states, *args,
-                                          encoder_hidden_states=encoder_hidden_states,
-                                          attention_mask=attention_mask,
-                                          **kwargs)
-
-        return res
-    
-
+  
 @torch.no_grad()
 def get_text_embeddings(tokenizer, text_encoder, prompt):
     text_input = tokenizer(
@@ -80,13 +18,6 @@ def get_text_embeddings(tokenizer, text_encoder, prompt):
     )
     text_embeddings = text_encoder(text_input.input_ids.cuda())[0]
     return text_embeddings
-
-def load_lora(unet, lora_0, lora_1, alpha):
-    lora = {}
-    for key in lora_0:
-        lora[key] = (1 - alpha) * lora_0[key] + alpha * lora_1[key]
-    unet.load_attn_procs(lora)
-    return unet
 
 @torch.no_grad()
 def image2latent(vae, image, resolution, device):

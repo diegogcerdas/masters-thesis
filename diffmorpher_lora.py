@@ -2,7 +2,7 @@ import pytorch_lightning as pl
 import torch.utils.data as data
 
 from datasets.dreambooth import DreamBoothDataset
-from models.lora import LoRA
+from models.lora_dreambooth import LoRADreamBooth
 import pytorch_lightning as pl
 import torch
 
@@ -11,13 +11,13 @@ if __name__ == "__main__":
     pretrained_model_name_or_path='runwayml/stable-diffusion-v1-5'
     resolution=512
     rank=4
-    instance_prompt="photo of <dgcmt>"
-    validation_prompt="photo of <dgcmt>"
+    instance_prompt="<dgc>"
+    validation_prompt="<dgc> oil painting"
     num_validation_images=25
     validation_epochs=10
     max_train_epochs=50
     inference_steps=100
-    output_dir='./diffmorpher/train_0/out'
+    output_dir='./diffmorpher/train_0/outputs'
     instance_data_root='./diffmorpher/train_0/data'
     seed=0
     learning_rate=1e-4
@@ -37,9 +37,10 @@ if __name__ == "__main__":
         shuffle=True,
         num_workers=num_workers,
     )
-    lora = LoRA(
+    lora = LoRADreamBooth(
         pretrained_model_name_or_path=pretrained_model_name_or_path,
         rank=rank,
+        train_text_encoder=False,
         instance_prompt=instance_prompt,
         validation_prompt=validation_prompt,
         num_validation_images=num_validation_images,
