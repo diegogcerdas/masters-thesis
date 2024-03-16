@@ -109,6 +109,8 @@ def run(
         for batch in train_dataloader:
 
             pixel_value, input_ids, weight_id = batch["pixel_values"], batch["input_ids"], batch["gt_weight_id"]
+            pixel_value = pixel_value.to(args_device)
+            input_ids = input_ids.to(args_device)
             input_ids_list = [y.squeeze(dim=1) for y in input_ids.chunk(chunks=input_ids.shape[1], dim=1)]
 
             # latents
@@ -141,9 +143,7 @@ def run(
             loss = F.mse_loss(noise, composed_score.float(), reduction="mean")
 
             loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-
+            
             # Let's make sure we don't update any embedding weights besides the newly added token
             index_no_updates = torch.ones(len(tokenizer), dtype=torch.bool)
             index_no_updates[placeholder_token_ids] = False
@@ -152,6 +152,9 @@ def run(
 
             with torch.no_grad():
                 text_encoder.get_input_embeddings().weight[index_no_updates] = orig_embeds_params[index_no_updates]
+
+            optimizer.step()
+            optimizer.zero_grad()
 
         if epoch % args_validation_epochs == 0:
             
