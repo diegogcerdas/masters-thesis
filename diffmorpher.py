@@ -21,13 +21,13 @@ def run(
     args_resolution: int,
     args_device: str,
 ):
-    pipe = StableDiffusionPipeline.from_pretrained(args_pretrained_model_name_or_path)
+    pipe = StableDiffusionPipeline.from_pretrained(args_pretrained_model_name_or_path).to(args_device)
 
     pipe.load_lora_weights(args_load_lora_path_0, weight_name="pytorch_lora_weights.safetensors", adapter_name="lora_0")
     pipe.load_lora_weights(args_load_lora_path_1, weight_name="pytorch_lora_weights.safetensors", adapter_name="lora_1")
 
-    text_embeddings_0 = get_text_embeddings(pipe.tokenizer, pipe.text_encoder, args_prompt_0)
-    text_embeddings_1 = get_text_embeddings(pipe.tokenizer, pipe.text_encoder, args_prompt_1)
+    text_embeddings_0 = get_text_embeddings(pipe.tokenizer, pipe.text_encoder, args_prompt_0, args_device)
+    text_embeddings_1 = get_text_embeddings(pipe.tokenizer, pipe.text_encoder, args_prompt_1, args_device)
     
     img_0 = Image.open(args_img_path_0)
     img_1 = Image.open(args_img_path_1)

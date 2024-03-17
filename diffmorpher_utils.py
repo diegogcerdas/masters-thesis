@@ -9,13 +9,13 @@ import lpips
 
   
 @torch.no_grad()
-def get_text_embeddings(tokenizer, text_encoder, prompt):
+def get_text_embeddings(tokenizer, text_encoder, prompt, device):
     text_input = tokenizer(
         prompt,
         padding="max_length",
         max_length=77,
         return_tensors="pt"
-    )
+    ).to(device)
     text_embeddings = text_encoder(text_input.input_ids.cuda())[0]
     return text_embeddings
 
@@ -70,14 +70,14 @@ def cal_image(
         noise_pred = pipeline.unet(latents, t, encoder_hidden_states=text_embeddings).sample
         # compute the previous noise sample x_t -> x_t-1
         latents = pipeline.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
-    image = latent2image(latents)
+    image = latent2image(pipeline.vae, latents)
     image = Image.fromarray(image)
     return image
 
 @torch.no_grad()
-def latent2image(self, latents, return_type='np'):
+def latent2image(vae, latents, return_type='np'):
     latents = 1 / 0.18215 * latents.detach()
-    image = self.vae.decode(latents)['sample']
+    image = vae.decode(latents)['sample']
     if return_type == 'np':
         image = (image / 2 + 0.5).clamp(0, 1)
         image = image.cpu().permute(0, 2, 3, 1).numpy()[0]

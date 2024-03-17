@@ -6,13 +6,16 @@ from models.lora_dreambooth import LoRADreamBooth
 import pytorch_lightning as pl
 import torch
 
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 if __name__ == "__main__":
 
     pretrained_model_name_or_path='runwayml/stable-diffusion-v1-5'
     resolution=512
     rank=4
-    instance_prompt="<dgc>"
-    validation_prompt="<dgc> oil painting"
+    instance_prompt=""
+    validation_prompt=""
     num_validation_images=25
     validation_epochs=10
     max_train_epochs=50
