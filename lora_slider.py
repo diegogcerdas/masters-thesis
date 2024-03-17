@@ -5,10 +5,12 @@ import numpy as np
 import torch
 from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
 from PIL import Image
+from tqdm import tqdm
 from transformers import AutoTokenizer, CLIPTextModel
 
-from lora_slider_utils import (LoRANetwork, encode_prompts, get_noisy_image, predict_noise, concat_embeddings)
-from tqdm import tqdm
+from lora_slider_utils import (LoRANetwork, concat_embeddings, encode_prompts,
+                               get_noisy_image, predict_noise)
+
 
 def run_train(
     args_pretrained_model_name_or_path: str,  # Name or path of the pretrained model
@@ -24,13 +26,23 @@ def run_train(
     args_save_path: str,  # Path to save the model
 ):
     scales = np.array([0, 5])
-    folders = np.array(['null', 'max'])
+    folders = np.array(["null", "max"])
 
-    noise_scheduler = DDPMScheduler.from_pretrained(args_pretrained_model_name_or_path, subfolder="scheduler")
-    tokenizer = AutoTokenizer.from_pretrained(args_pretrained_model_name_or_path, subfolder="tokenizer")
-    text_encoder = CLIPTextModel.from_pretrained(args_pretrained_model_name_or_path, subfolder="text_encoder").to(args_device)
-    vae = AutoencoderKL.from_pretrained(args_pretrained_model_name_or_path, subfolder="vae").to(args_device)
-    unet = UNet2DConditionModel.from_pretrained(args_pretrained_model_name_or_path, subfolder="unet").to(args_device)
+    noise_scheduler = DDPMScheduler.from_pretrained(
+        args_pretrained_model_name_or_path, subfolder="scheduler"
+    )
+    tokenizer = AutoTokenizer.from_pretrained(
+        args_pretrained_model_name_or_path, subfolder="tokenizer"
+    )
+    text_encoder = CLIPTextModel.from_pretrained(
+        args_pretrained_model_name_or_path, subfolder="text_encoder"
+    ).to(args_device)
+    vae = AutoencoderKL.from_pretrained(
+        args_pretrained_model_name_or_path, subfolder="vae"
+    ).to(args_device)
+    unet = UNet2DConditionModel.from_pretrained(
+        args_pretrained_model_name_or_path, subfolder="unet"
+    ).to(args_device)
 
     text_encoder.requires_grad_(False)
     unet.requires_grad_(False)
@@ -45,29 +57,37 @@ def run_train(
         train_method=args_training_method,
     ).to(args_device)
 
-    optimizer = torch.optim.AdamW(network.prepare_optimizer_params(), lr=args_learning_rate)
+    optimizer = torch.optim.AdamW(
+        network.prepare_optimizer_params(), lr=args_learning_rate
+    )
     criteria = torch.nn.MSELoss()
 
     # prompts
-    unconditional_prompt = encode_prompts(tokenizer, text_encoder, [''])
-    positive_prompt = encode_prompts(tokenizer, text_encoder, [''])
-    neutral_prompt = encode_prompts(tokenizer, text_encoder, [''])
+    unconditional_prompt = encode_prompts(tokenizer, text_encoder, [""])
+    positive_prompt = encode_prompts(tokenizer, text_encoder, [""])
+    neutral_prompt = encode_prompts(tokenizer, text_encoder, [""])
 
     for i in tqdm(range(args_train_steps)):
-
         with torch.no_grad():
-            
             optimizer.zero_grad()
-            
+
             noise_scheduler.set_timesteps(args_max_denoising_steps, device=args_device)
             timesteps_to = torch.randint(1, args_max_denoising_steps - 1, (1,)).item()
 
             img_fs = os.listdir(f"{args_folder_main}/{folders[0]}/")
-            img_fs = [im_ for im_ in img_fs if ".png" in im_ or ".jpg" in im_ or ".jpeg" in im_ or ".webp" in im_]
+            img_fs = [
+                im_
+                for im_ in img_fs
+                if ".png" in im_ or ".jpg" in im_ or ".jpeg" in im_ or ".webp" in im_
+            ]
             img_f = img_fs[random.randint(0, len(img_fs) - 1)]
 
-            img1 = Image.open(f"{args_folder_main}/{folders[0]}/{img_f}").resize((512, 512))
-            img2 = Image.open(f"{args_folder_main}/{folders[1]}/{img_f}").resize((512, 512))
+            img1 = Image.open(f"{args_folder_main}/{folders[0]}/{img_f}").resize(
+                (512, 512)
+            )
+            img2 = Image.open(f"{args_folder_main}/{folders[1]}/{img_f}").resize(
+                (512, 512)
+            )
 
             generator = torch.Generator(device=args_device).manual_seed(args_seed)
             noisy_latents_low, noise_low = get_noisy_image(
@@ -90,9 +110,11 @@ def run_train(
             )
             noisy_latents_high = noisy_latents_high.to(args_device)
             noise_high = noise_high.to(args_device)
-            
+
             noise_scheduler.set_timesteps(1000)
-            current_timestep = noise_scheduler.timesteps[int(timesteps_to * 1000 / args_max_denoising_steps)]
+            current_timestep = noise_scheduler.timesteps[
+                int(timesteps_to * 1000 / args_max_denoising_steps)
+            ]
 
         network.set_lora_slider(scale=scales[0])
         with network:

@@ -46,7 +46,9 @@ if __name__ == "__main__":
         cfg.pretrained_model_name_or_path,
     )
     if cfg.lora_dir is not None:
-        pipeline.load_lora_weights(cfg.lora_dir, weight_name="pytorch_lora_weights.safetensors")
+        pipeline.load_lora_weights(
+            cfg.lora_dir, weight_name="pytorch_lora_weights.safetensors"
+        )
     pipeline_args = {
         "prompt": cfg.prompt,
         "num_inference_steps": cfg.inference_steps,

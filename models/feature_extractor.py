@@ -2,13 +2,12 @@ import numpy as np
 import open_clip
 import torch
 import torch.nn as nn
+from diffusers import AutoencoderKL
+from diffusers.image_processor import VaeImageProcessor
 from PIL import Image
 from tqdm import tqdm
 
 from datasets.nsd import NaturalScenesDataset
-
-from diffusers import AutoencoderKL
-from diffusers.image_processor import VaeImageProcessor
 
 
 class FeatureExtractorType:
@@ -46,19 +45,29 @@ class CLIPExtractor(FeatureExtractor):
     def forward(self, data: Image.Image):
         with torch.no_grad():
             x = self.transform(data).unsqueeze(0).to(self.device)
-            x = self.clip.encode_image(x).reshape(1,-1).float()
+            x = self.clip.encode_image(x).reshape(1, -1).float()
         return x
-    
+
 
 class VAEExtractor(FeatureExtractor):
-    def __init__(self, pretrained_model_name_or_path: str, resolution: int, name: str, device: str = None):
+    def __init__(
+        self,
+        pretrained_model_name_or_path: str,
+        resolution: int,
+        name: str,
+        device: str = None,
+    ):
         super().__init__()
         self.device = device
         self.resolution = resolution
-        self.vae = AutoencoderKL.from_pretrained(pretrained_model_name_or_path, subfolder="vae")
+        self.vae = AutoencoderKL.from_pretrained(
+            pretrained_model_name_or_path, subfolder="vae"
+        )
         vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.image_processor = VaeImageProcessor(vae_scale_factor=vae_scale_factor)
-        self.feature_size = self.vae.config.latent_channels * (resolution // vae_scale_factor)**2
+        self.feature_size = (
+            self.vae.config.latent_channels * (resolution // vae_scale_factor) ** 2
+        )
         self.name = name
         self.to(device)
 

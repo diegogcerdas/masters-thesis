@@ -1,10 +1,12 @@
 import torch
 import tqdm
+from diffusers import StableDiffusionPipeline
 from PIL import Image
 from torchvision import transforms
-from diffusers import StableDiffusionPipeline
 
-from diffmorpher_utils import get_text_embeddings, image2latent, ddim_inversion, cal_image, AlphaScheduler
+from diffmorpher_utils import (AlphaScheduler, cal_image, ddim_inversion,
+                               get_text_embeddings, image2latent)
+
 
 def run(
     args_pretrained_model_name_or_path: str,
@@ -21,33 +23,45 @@ def run(
     args_resolution: int,
     args_device: str,
 ):
-    pipe = StableDiffusionPipeline.from_pretrained(args_pretrained_model_name_or_path).to(args_device)
+    pipe = StableDiffusionPipeline.from_pretrained(
+        args_pretrained_model_name_or_path
+    ).to(args_device)
 
-    pipe.load_lora_weights(args_load_lora_path_0, weight_name="pytorch_lora_weights.safetensors", adapter_name="lora_0")
-    pipe.load_lora_weights(args_load_lora_path_1, weight_name="pytorch_lora_weights.safetensors", adapter_name="lora_1")
+    pipe.load_lora_weights(
+        args_load_lora_path_0,
+        weight_name="pytorch_lora_weights.safetensors",
+        adapter_name="lora_0",
+    )
+    pipe.load_lora_weights(
+        args_load_lora_path_1,
+        weight_name="pytorch_lora_weights.safetensors",
+        adapter_name="lora_1",
+    )
 
-    text_embeddings_0 = get_text_embeddings(pipe.tokenizer, pipe.text_encoder, args_prompt_0, args_device)
-    text_embeddings_1 = get_text_embeddings(pipe.tokenizer, pipe.text_encoder, args_prompt_1, args_device)
-    
+    text_embeddings_0 = get_text_embeddings(
+        pipe.tokenizer, pipe.text_encoder, args_prompt_0, args_device
+    )
+    text_embeddings_1 = get_text_embeddings(
+        pipe.tokenizer, pipe.text_encoder, args_prompt_1, args_device
+    )
+
     img_0 = Image.open(args_img_path_0)
     img_1 = Image.open(args_img_path_1)
     img_0 = image2latent(pipe.vae, img_0, args_resolution, args_device)
     img_1 = image2latent(pipe.vae, img_1, args_resolution, args_device)
-    
+
     pipe.scheduler.set_timesteps(args_num_inference_steps)
     alpha = 0
-    pipe.set_adapters(["lora_0", "lora_1"], adapter_weights=[1-alpha, alpha])
+    pipe.set_adapters(["lora_0", "lora_1"], adapter_weights=[1 - alpha, alpha])
     img_noise_0 = ddim_inversion(pipe.unet, pipe.scheduler, img_0, text_embeddings_0)
     alpha = 1
-    pipe.set_adapters(["lora_0", "lora_1"], adapter_weights=[1-alpha, alpha])
+    pipe.set_adapters(["lora_0", "lora_1"], adapter_weights=[1 - alpha, alpha])
     img_noise_1 = ddim_inversion(pipe.unet, pipe.scheduler, img_1, text_embeddings_1)
 
     def morph(alpha_list, desc):
-    
         images = []
         for alpha in tqdm(alpha_list, desc=desc):
-
-            pipe.set_adapters(["lora_0", "lora_1"], adapter_weights=[1-alpha, alpha])
+            pipe.set_adapters(["lora_0", "lora_1"], adapter_weights=[1 - alpha, alpha])
 
             image = cal_image(
                 pipe,

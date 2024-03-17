@@ -3,12 +3,10 @@ from typing import Literal, Optional
 
 import torch
 import torch.nn as nn
-from diffusers import UNet2DConditionModel, SchedulerMixin
+from diffusers import SchedulerMixin, UNet2DConditionModel
+from diffusers.image_processor import VaeImageProcessor
 from safetensors.torch import save_file
 from transformers import AutoTokenizer, CLIPTextModel
-from diffusers import UNet2DConditionModel, SchedulerMixin
-from diffusers.image_processor import VaeImageProcessor
-
 
 #################################################################################
 # LoRA Network
@@ -284,9 +282,10 @@ def get_noisy_image(
     init_latents = vae.encode(image).latent_dist.sample(None)
     init_latents = vae.config.scaling_factor * init_latents
     noise = torch.randn(init_latents.shape, generator=generator, device=vae.device)
-    timestep = scheduler.timesteps[total_timesteps:total_timesteps+1]
+    timestep = scheduler.timesteps[total_timesteps : total_timesteps + 1]
     init_latents = scheduler.add_noise(init_latents, noise, timestep)
     return init_latents, noise
+
 
 def predict_noise(
     unet: UNet2DConditionModel,
@@ -311,6 +310,7 @@ def predict_noise(
         noise_pred_text - noise_pred_uncond
     )
     return guided_target
+
 
 def concat_embeddings(
     unconditional: torch.FloatTensor,

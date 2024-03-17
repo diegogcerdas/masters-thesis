@@ -1,32 +1,33 @@
+import os
+
 import pytorch_lightning as pl
+import torch
 import torch.utils.data as data
 
 from datasets.dreambooth import DreamBoothDataset
 from models.lora_dreambooth import LoRADreamBooth
-import pytorch_lightning as pl
-import torch
 
-import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 if __name__ == "__main__":
-
-    pretrained_model_name_or_path='runwayml/stable-diffusion-v1-5'
-    resolution=512
-    rank=4
-    instance_prompt=""
-    validation_prompt=""
-    num_validation_images=25
-    validation_epochs=10
-    max_train_epochs=50
-    inference_steps=100
-    output_dir='./diffmorpher/train_0/outputs'
-    instance_data_root='./diffmorpher/train_0/data'
-    seed=0
-    learning_rate=1e-4
-    batch_size=8
-    num_workers=18
-    device=torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+    pretrained_model_name_or_path = "runwayml/stable-diffusion-v1-5"
+    resolution = 512
+    rank = 4
+    instance_prompt = ""
+    validation_prompt = ""
+    num_validation_images = 25
+    validation_epochs = 10
+    max_train_epochs = 50
+    inference_steps = 100
+    output_dir = "./diffmorpher/train_0/outputs"
+    instance_data_root = "./diffmorpher/train_0/data"
+    seed = 0
+    learning_rate = 1e-4
+    batch_size = 8
+    num_workers = 18
+    device = (
+        torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+    )
 
     pl.seed_everything(seed)
 

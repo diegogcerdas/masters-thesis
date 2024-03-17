@@ -161,7 +161,7 @@ class LoRADreamBooth(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         return self.compute_loss(batch)
-    
+
     def sample_and_save(self, save_folder):
         pipeline = DiffusionPipeline.from_pretrained(
             self.pretrained_model_name_or_path,
@@ -199,13 +199,13 @@ class LoRADreamBooth(pl.LightningModule):
             unet_lora_layers=unet_lora_state_dict,
             text_encoder_lora_layers=text_encoder_state_dict,
         )
-    
+
     def on_train_epoch_end(self) -> None:
         if self.current_epoch == self.max_train_epochs - 1:
             save_folder = os.path.join(self.output_dir, "final")
             self.sample_and_save(save_folder)
         return super().on_train_epoch_end()
-    
+
     def on_train_epoch_start(self) -> None:
         if self.current_epoch % self.validation_epochs == 0:
             save_folder = os.path.join(self.output_dir, f"epoch_{self.current_epoch}")
