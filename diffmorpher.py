@@ -21,6 +21,7 @@ def run(
     args_use_adain: bool,
     args_use_reschedule: bool,
     args_resolution: int,
+    args_seed: int,
     args_device: str,
 ):
     pipe = StableDiffusionPipeline.from_pretrained(
@@ -57,6 +58,10 @@ def run(
     alpha = 1
     pipe.set_adapters(["lora_0", "lora_1"], adapter_weights=[1 - alpha, alpha])
     img_noise_1 = ddim_inversion(pipe.unet, pipe.scheduler, img_1, text_embeddings_1)
+
+    generator = torch.Generator(device=args_device).manual_seed(args_seed)
+    img_noise_0 = torch.randn(img_noise_0.shape, generator=generator, device=args_device)
+    img_noise_1 = img_noise_0
 
     def morph(alpha_list, desc):
         images = []
