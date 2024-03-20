@@ -1,5 +1,5 @@
 import torch
-import tqdm
+from tqdm import tqdm
 from diffusers import StableDiffusionPipeline
 from PIL import Image
 from torchvision import transforms
