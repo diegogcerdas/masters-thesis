@@ -52,8 +52,6 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
             1,
             do_classifier_free_guidance,
             negative_prompt,
-            prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=text_encoder_lora_scale,
         )
         # For classifier free guidance, we need to do two forward passes.
@@ -76,13 +74,11 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
             prompt_embeds.dtype,
             device,
             generator,
-            latents,
         )
         latent_list = list(all_latents.chunk(num_batch, dim=0))
 
         # 6. Prepare extra step kwargs. TODO: Logic should ideally just be moved out of the pipeline
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
-
         
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
