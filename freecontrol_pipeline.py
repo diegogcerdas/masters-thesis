@@ -1,13 +1,109 @@
 from typing import Any, Dict, List, Optional, Union
-from diffusers import StableDiffusionPipeline
+from diffusers import StableDiffusionPipeline, DDIMInverseScheduler, DDIMScheduler
 import torch
+from PIL import Image
+from tqdm import tqdm
+import numpy as np
 from freecontrol_utils import prep_unet_conv, prep_unet_attention, get_self_attn_feat
 
 
 class FreeControlSDPipeline(StableDiffusionPipeline):
-    """
-    Method adopted from https://github.com/huggingface/diffusers/blob/v0.21.0/src/diffusers/pipelines/stable_diffusion/pipeline_stable_diffusion.py
-    """
+
+    def prepare_image_latents(self, image, dtype, device, generator=None):
+        image = image.to(device=device, dtype=dtype)
+        latents = self.vae.encode(image).latent_dist.sample(generator)
+        latents = self.vae.config.scaling_factor * latents
+        latents = torch.cat([latents], dim=0)
+        return latents
+
+    @torch.no_grad()
+    def ddim_inversion(
+        self,
+        image: Image.Image,
+        prompt: str,
+        num_inference_steps: int,
+        guidance_scale: float = 1,
+        generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
+    ):
+        # 1. Define call parameters
+        device = self._execution_device
+        do_classifier_free_guidance = guidance_scale > 1.0
+        self.inverse_scheduler = DDIMInverseScheduler.from_config(self.scheduler.config)
+
+        # 2. Preprocess image
+        image = self.image_processor.preprocess(image)
+
+        # 3. Prepare latent variables
+        latents = self.prepare_image_latents(image, self.vae.dtype, device, generator)
+
+        # 4. Encode input prompt
+        num_images_per_prompt = 1
+        prompt_embeds, _ = self.encode_prompt(
+            prompt,
+            device,
+            num_images_per_prompt,
+            do_classifier_free_guidance,
+            prompt_embeds=prompt_embeds,
+        )
+
+        # 6. Prepare timesteps
+        self.inverse_scheduler.set_timesteps(num_inference_steps, device=device)
+        timesteps = self.inverse_scheduler.timesteps
+
+        # 7. Denoising loop
+        for t in tqdm(timesteps):
+
+            # expand the latents if we are doing classifier free guidance
+            latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+            latent_model_input = self.inverse_scheduler.scale_model_input(latent_model_input, t)
+
+            # predict the noise residual
+            noise_pred = self.unet(latent_model_input, t, encoder_hidden_states=prompt_embeds).sample
+
+            # perform guidance
+            if do_classifier_free_guidance:
+                noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+
+            # compute the previous noisy sample x_t -> x_t-1
+            latents = self.inverse_scheduler.step(noise_pred, t, latents).prev_sample
+
+        inverted_latents = latents.detach().clone()
+
+        return inverted_latents, prompt_embeds
+    
+    @torch.no_grad()
+    def ddim_sample(
+        self,
+        latents: torch.Tensor,
+        num_inference_steps: int,
+        text_embeddings: torch.Tensor,
+    ):
+        device = self._execution_device
+        self.scheduler = DDIMScheduler.from_config(self.scheduler.config)
+        self.scheduler.set_timesteps(num_inference_steps, device=device)
+
+        for t in tqdm(self.scheduler.timesteps):
+            # predict the noise
+            noise_pred = self.unet(latents, t, encoder_hidden_states=text_embeddings).sample
+            # compute the previous noise sample x_t -> x_t-1
+            latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
+
+        image = self.latent2image(latents)
+        image = Image.fromarray(image)
+        return image
+    
+    @torch.no_grad()
+    def latent2image(self, latents, return_type="np"):
+        latents = 1 / 0.18215 * latents.detach()
+        image = self.vae.decode(latents)["sample"]
+        if return_type == "np":
+            image = (image / 2 + 0.5).clamp(0, 1)
+            image = image.cpu().permute(0, 2, 3, 1).numpy()[0]
+            image = (image * 255).astype(np.uint8)
+        elif return_type == "pt":
+            image = (image / 2 + 0.5).clamp(0, 1)
+        return image
 
     def sample_semantic_bases(
         self,
