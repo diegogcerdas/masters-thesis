@@ -12,7 +12,7 @@ guidance_scale = 1
 seed = 42
 
 pipeline = FreeControlSDPipeline.from_pretrained(pretrained_model_name_or_path).to(device)
-img = Image.open(img_path).resize((512, 512))
+img = Image.open(img_path).convert('RGB').resize((768, 768))
 generator = torch.Generator(device=device).manual_seed(seed)
 
 inverted_latents, prompt_embeds = pipeline.ddim_inversion(
@@ -32,7 +32,7 @@ recon = pipeline.ddim_sample(
 recon.save(recon_path)
 
 pipeline = FreeControlSDPipeline.from_pretrained(pretrained_model_name_or_path).to(device)
-img = Image.open(img_path)
+img = Image.open(img_path).convert('RGB').resize((768, 768))
 generator = torch.Generator(device=device).manual_seed(seed)
 
 inverted_latents, prompt_embeds = pipeline.ddim_inversion(

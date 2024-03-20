@@ -43,7 +43,6 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
             device,
             num_images_per_prompt,
             do_classifier_free_guidance,
-            prompt_embeds=prompt_embeds,
         )
 
         # 6. Prepare timesteps
