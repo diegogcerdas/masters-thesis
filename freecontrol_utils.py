@@ -67,12 +67,9 @@ class MySelfAttnProcessor:
     def __init__(self, attention_op: Optional[Callable] = None):
         self.attention_op = attention_op
 
-    def __call__(self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None, temb=None,
-                 scale: float = 1.0, ):
+    def __call__(self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None, temb=None):
 
         residual = hidden_states
-
-        args = (scale,)
 
         if attn.spatial_norm is not None:
             hidden_states = attn.spatial_norm(hidden_states, temb)
@@ -103,15 +100,15 @@ class MySelfAttnProcessor:
         if attn.group_norm is not None:
             hidden_states = attn.group_norm(hidden_states.transpose(1, 2)).transpose(1, 2)
 
-        query = attn.to_q(hidden_states, scale=scale)
+        query = attn.to_q(hidden_states)
 
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
         elif attn.norm_cross:
             encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
 
-        key = attn.to_k(encoder_hidden_states, scale=scale)
-        value = attn.to_v(encoder_hidden_states, scale=scale)
+        key = attn.to_k(encoder_hidden_states)
+        value = attn.to_v(encoder_hidden_states)
 
         # Record the Q,K,V for PCA guidance
         self.key = key
@@ -161,14 +158,14 @@ def classify_blocks(block_list, name):
             break
     return is_correct_block
 
-def get_self_attn_feat(unet, injection_config):
+def get_self_attn_feat(unet, blocks):
     hidden_state_dict = dict()
     query_dict = dict()
     key_dict = dict()
     value_dict = dict()
     for name, module in unet.named_modules():
         module_name = type(module).__name__
-        if module_name == "Attention" and 'attn1' in name and classify_blocks(injection_config.blocks, name=name):
+        if module_name == "Attention" and 'attn1' in name and classify_blocks(blocks, name=name):
             res = int(math.sqrt(module.processor.hidden_state.shape[1]))
             bs = module.processor.hidden_state.shape[0]
             hidden_state_dict[name] = module.processor.hidden_state.cpu().permute(0, 2, 1).reshape(bs, -1, res, res)

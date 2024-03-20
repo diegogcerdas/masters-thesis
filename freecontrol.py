@@ -42,7 +42,7 @@ if __name__ == "__main__":
         args_negative_prompt="",
         args_num_inference_steps=100,
         args_num_batch=1,
-        args_num_save_basis=1,
+        args_num_save_basis=64,
         args_num_save_steps=120,
         args_output_path="freecontrol_output",
         args_seed=42,

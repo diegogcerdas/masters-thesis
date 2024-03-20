@@ -22,6 +22,7 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
         cross_attention_kwargs: Optional[Dict[str, Any]] = None,
         guidance_scale: float = 7.5,
         eta: float = 0.0,
+        pca_guidance_blocks: List[str] = ['up_blocks.1'],
     ):
         # 0. Prepare the UNet
         self.unet = prep_unet_attention(self.unet)
@@ -117,7 +118,7 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
                     latent_list[latent_id] = latents
 
                     # 8. Post-processing the pca features
-                    hidden_state_dict, query_dict, key_dict, value_dict = get_self_attn_feat(self.unet, self.sampling_config.guidance.pca_guidance)
+                    hidden_state_dict, query_dict, key_dict, value_dict = get_self_attn_feat(self.unet, pca_guidance_blocks)
                     for name in hidden_state_dict.keys():
                         def log_to_dict(feat, selected_dict, name):
                             feat = feat.chunk(2)[1]
