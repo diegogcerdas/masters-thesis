@@ -77,16 +77,68 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
         latents: torch.Tensor,
         num_inference_steps: int,
         text_embeddings: torch.Tensor,
+        num_save_basis: int = 64,
+        num_save_steps: int = 120,
+        pca_guidance_blocks: List[str] = ['up_blocks.1'],
     ):
+        self.unet = prep_unet_attention(self.unet)
+        self.unet = prep_unet_conv(self.unet)
+        self.pca_info: Dict = dict()
+
         device = self._execution_device
         self.scheduler = DDIMScheduler.from_config(self.scheduler.config)
         self.scheduler.set_timesteps(num_inference_steps, device=device)
 
-        for t in tqdm(self.scheduler.timesteps):
+        for i, t in tqdm(enumerate(self.scheduler.timesteps)):
+
+            attn_key_dict = dict()
+            
             # predict the noise
-            noise_pred = self.unet(latents, t, encoder_hidden_states=text_embeddings).sample
+            noise_pred = self.unet(latents, t, encoder_hidden_states=text_embeddings, return_dict=False)[0]
             # compute the previous noise sample x_t -> x_t-1
             latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
+
+            hidden_state_dict, _, key_dict, _ = get_self_attn_feat(self.unet, pca_guidance_blocks)
+            for name in hidden_state_dict.keys():
+                def log_to_dict(feat, selected_dict, name):
+                    feat = feat.chunk(2)[1]
+                    if name in selected_dict.keys():
+                        selected_dict[name].append(feat)
+                    else:
+                        selected_dict[name] = [feat]
+                log_to_dict(key_dict[name], attn_key_dict, name)
+
+            def apply_pca(feat):
+                with torch.autocast(device_type='cuda', dtype=torch.float32):
+                    feat = feat.contiguous().to(torch.float32)
+                    # feat shape in [bs, channels, 16, 16]
+                    _, channels, _, _ = feat.shape
+                    X = feat.permute(0, 2, 3, 1).reshape(-1, channels).to('cuda')
+                    # Computing PCA
+                    mean = X.mean(dim=0)
+                    tensor_centered = X - mean
+                    _, _, V = torch.svd(tensor_centered)
+                    n_egv = V.shape[-1]
+                    if n_egv > num_save_basis and num_save_basis > 0:
+                        V = V[:, :num_save_basis]
+                    basis = V.T
+                assert mean.shape[-1] == basis.shape[-1]
+                return {
+                    'mean': mean.cpu(),
+                    'basis': basis.cpu(),
+                }
+
+            def process_feat_dict(feat_dict):
+                for name in feat_dict.keys():
+                    feat = feat_dict[name]
+                    feat_dict[name] = {}
+                    feat_dict[name]['features'] = torch.cat(feat, dim=0)
+                    feat_dict[name]['pca'] = apply_pca(feat_dict[name]['features'])
+
+            # Only process for the first num_save_steps
+            if i < num_save_steps:
+                process_feat_dict(attn_key_dict)
+                self.pca_info[i] = {'attn_key': attn_key_dict}
 
         image = self.latent2image(latents)
         image = Image.fromarray(image)
