@@ -4,6 +4,7 @@ from typing import List, Union
 import pandas as pd
 from PIL import Image
 from torch.utils import data
+from torchvision import transforms
 
 from utils.nsd_utils import (get_roi_indices, get_voxel_neighborhood,
                              load_whole_surface, parse_rois)
@@ -67,6 +68,7 @@ class NaturalScenesDataset(data.Dataset):
 
     def __getitem__(self, idx):
         img = Image.open(os.path.join(self.root, self.df.iloc[idx]["filename"]))
+        img = transforms.ToTensor()(img).float()
         coco_id = self.df.iloc[idx]["coco_id"]
         if self.partition == "train":
             activation = self.fmri_data[idx, self.roi_indices]

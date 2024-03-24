@@ -4,8 +4,8 @@ import torch
 import torch.nn as nn
 from diffusers import AutoencoderKL
 from diffusers.image_processor import VaeImageProcessor
-from PIL import Image
 from tqdm import tqdm
+from torchvision import transforms
 
 from datasets.nsd import NaturalScenesDataset
 
@@ -38,14 +38,23 @@ class CLIPExtractor(FeatureExtractor):
         self.clip, _, self.transform = open_clip.create_model_and_transforms(
             model_name=model_name, pretrained=pretrained
         )
+        self.transform.transforms.pop(-3)  # remove rgb transform
+        self.transform.transforms.pop(-2)  # remove totensor transform
         self.feature_size = self.clip.visual.output_dim
         self.name = name
+        self.mean = 0
+        self.std = 0.65
         self.to(device)
 
-    def forward(self, data: Image.Image):
-        with torch.no_grad():
-            x = self.transform(data).unsqueeze(0).to(self.device)
-            x = self.clip.encode_image(x).reshape(1, -1).float()
+    def forward(self, data: torch.Tensor, mode: str = "val"):
+        if mode == "val":
+            with torch.no_grad():
+                x = self.transform(data).to(self.device)
+                x = self.clip.encode_image(x).reshape(x.shape[0], -1).float()
+        elif mode == "train":
+            x = self.transform(data).to(self.device)
+            x = self.clip.encode_image(x).reshape(x.shape[0], -1).float()
+        x = (x - self.mean) / self.std
         return x
 
 
@@ -55,6 +64,8 @@ class VAEExtractor(FeatureExtractor):
         pretrained_model_name_or_path: str,
         resolution: int,
         name: str,
+        mean: float,
+        std: float,
         device: str = None,
     ):
         super().__init__()
@@ -69,15 +80,25 @@ class VAEExtractor(FeatureExtractor):
             self.vae.config.latent_channels * (resolution // vae_scale_factor) ** 2
         )
         self.name = name
+        self.mean = mean
+        self.std = std
         self.to(device)
 
-    def forward(self, data: Image.Image):
-        with torch.no_grad():
-            image = data.resize((self.resolution, self.resolution))
+    def forward(self, data: torch.Tensor, mode: str = "val"):
+        if mode == "val":
+            with torch.no_grad():
+                image = transforms.Resize((self.resolution, self.resolution))(data)
+                image = self.image_processor.preprocess(image).to(self.device)
+                latents = self.vae.encode(image).latent_dist.sample(None)
+                latents = self.vae.config.scaling_factor * latents
+                latents = latents.reshape(latents.shape[0], -1)
+        elif mode == "train":
+            image = transforms.Resize((self.resolution, self.resolution))(data)
             image = self.image_processor.preprocess(image).to(self.device)
             latents = self.vae.encode(image).latent_dist.sample(None)
             latents = self.vae.config.scaling_factor * latents
-            latents = latents.reshape(1, -1)
+            latents = latents.reshape(latents.shape[0], -1)
+        latents = (latents - self.mean) / self.std
         return latents
 
 
@@ -103,6 +124,8 @@ def create_feature_extractor(
             pretrained_model_name_or_path="runwayml/stable-diffusion-v1-5",
             resolution=512,
             name="vae_1_5",
+            mean=0.05,
+            std=0.85,
             device=device,
         )
     elif type == FeatureExtractorType.VAE_2_0:
@@ -110,6 +133,8 @@ def create_feature_extractor(
             pretrained_model_name_or_path="stabilityai/stable-diffusion-2",
             resolution=768,
             name="vae_2_0",
+            mean=0.1,
+            std=0.95,
             device=device,
         )
     else:

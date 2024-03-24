@@ -3,6 +3,30 @@ from dataclasses import dataclass
 
 
 @dataclass
+class ConfigEncoder:
+    subject: int
+    roi: str
+    hemisphere: str
+    feature_extractor_type: str
+    n_neighbors: int
+    distance_metric: str
+    predict_average: bool
+    data_dir: str
+    ckpt_dir: str
+    logs_dir: str
+    exp_name: str
+    seed: int
+    learning_rate: float
+    batch_size: int
+    num_workers: int
+    max_epochs: int
+    device: str
+    wandb_project: str
+    wandb_entity: str
+    wandb_mode: str
+
+
+@dataclass
 class ConfigSynthesis:
     pretrained_model_name_or_path: str
     prompt: str
@@ -52,8 +76,10 @@ def config_from_args(args: dict, mode: str = "train"):
         class_name = ConfigSynthesis
     elif mode == "lora":
         class_name = ConfigLora
+    elif mode == "encoder":
+        class_name = ConfigEncoder
     else:
-        raise ValueError("Mode must be either 'train' or 'test'")
+        raise ValueError("Mode not recognized.")
     return class_name(
         **{f.name: getattr(args, f.name) for f in dataclasses.fields(class_name)}
     )

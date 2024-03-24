@@ -11,6 +11,8 @@ from tqdm import tqdm
 from datasets.nsd import NaturalScenesDataset
 from models.feature_extractor import create_feature_extractor
 
+from torchvision import transforms
+
 
 class NSDFeaturesDataset(data.Dataset):
     def __init__(
@@ -43,6 +45,7 @@ class NSDFeaturesDataset(data.Dataset):
 
     def __getitem__(self, idx):
         img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
+        img = transforms.ToTensor()(img).float()
         target = self.targets[idx].squeeze().float()
         target = (target - self.targets_mean) / self.targets_std
         low_dim = self.low_dim[idx]
