@@ -10,6 +10,7 @@ from peft.utils import get_peft_model_state_dict
 from diffusers.loaders import LoraLoaderMixin
 from utils.img_utils import save_images
 from torchvision import transforms
+import contextlib
 from ddpo_utils import ddim_step_with_logprob, pipeline_with_logprob, get_prompt_fn
 
 
@@ -103,6 +104,8 @@ def run(
     )[0]
     uncond_prompt_embeds = prompt_embeds.repeat(args_batch_size, 1, 1)
 
+    autocast = contextlib.nullcontext
+
     # Train!
     for epoch in range(args_num_epochs):
         
@@ -126,14 +129,15 @@ def run(
         prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
 
         # sample
-        images, _, latents, log_probs = pipeline_with_logprob(
-            pipeline,
-            prompt_embeds=prompt_embeds,
-            negative_prompt_embeds=uncond_prompt_embeds,
-            num_inference_steps=args_num_timesteps,
-            guidance_scale=args_guidance_scale,
-            eta=args_eta,
-        )
+        with autocast():
+            images, _, latents, log_probs = pipeline_with_logprob(
+                pipeline,
+                prompt_embeds=prompt_embeds,
+                negative_prompt_embeds=uncond_prompt_embeds,
+                num_inference_steps=args_num_timesteps,
+                guidance_scale=args_guidance_scale,
+                eta=args_eta,
+            )
 
         latents = torch.stack(latents, dim=1)  # (batch_size, num_steps + 1, 4, 64, 64)
         log_probs = torch.stack(log_probs, dim=1)  # (batch_size, num_steps, 1)
@@ -221,27 +225,29 @@ def run(
 
                 for j in tqdm(range(args_num_timesteps), desc="Timestep"):
 
-                    noise_pred = pipeline.unet(
-                        torch.cat([sample["latents"][:, j]] * 2),
-                        torch.cat([sample["timesteps"][:, j]] * 2),
-                        embeds,
-                    ).sample
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = (
-                        noise_pred_uncond
-                        + args_guidance_scale
-                        * (noise_pred_text - noise_pred_uncond)
-                    )
+                    with autocast():
 
-                    # compute the log prob of next_latents given latents under the current model
-                    _, log_prob = ddim_step_with_logprob(
-                        pipeline.scheduler,
-                        noise_pred,
-                        sample["timesteps"][:, j],
-                        sample["latents"][:, j],
-                        eta=args_eta,
-                        prev_sample=sample["next_latents"][:, j],
-                    )
+                        noise_pred = pipeline.unet(
+                            torch.cat([sample["latents"][:, j]] * 2),
+                            torch.cat([sample["timesteps"][:, j]] * 2),
+                            embeds,
+                        ).sample
+                        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                        noise_pred = (
+                            noise_pred_uncond
+                            + args_guidance_scale
+                            * (noise_pred_text - noise_pred_uncond)
+                        )
+
+                        # compute the log prob of next_latents given latents under the current model
+                        _, log_prob = ddim_step_with_logprob(
+                            pipeline.scheduler,
+                            noise_pred,
+                            sample["timesteps"][:, j],
+                            sample["latents"][:, j],
+                            eta=args_eta,
+                            prev_sample=sample["next_latents"][:, j],
+                        )
 
                     # ppo logic
                     advantages = torch.clamp(

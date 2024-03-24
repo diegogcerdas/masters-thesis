@@ -18,7 +18,7 @@ if __name__ == "__main__":
         args_save_folder="./outputs/ddpo",
         args_adv_clip_max=5,
         args_clip_range=1e-4,
-        args_batch_size=1,
+        args_batch_size=4,
         args_learning_rate=1e-4,
         args_seed=0,
         args_device=torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu"),
