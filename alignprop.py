@@ -1,7 +1,7 @@
 import torch
 import os
 from tqdm import tqdm
-from diffusers import StableDiffusionPipeline, DDIMScheduler, DPMSolverMultistepScheduler
+from diffusers import StableDiffusionPipeline, DDIMScheduler
 import pytorch_lightning as pl
 from peft import LoraConfig
 from models.brain_encoder import EncoderModule
@@ -12,11 +12,10 @@ from utils.img_utils import save_images
 from torchvision import transforms
 import random
 import torch.utils.checkpoint as checkpoint
-from ddpo_utils import get_prompt_fn
 
 def run(
     args_pretrained_model_name_or_path: str,
-    args_prompt_filename: str,
+    args_instance_prompt: str,
     args_num_timesteps: int,
     args_guidance_scale: float,
     args_lora_rank: int,
@@ -47,6 +46,11 @@ def run(
     # switch to DDIM scheduler
     pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
     pipeline.scheduler.set_timesteps(args_num_timesteps)
+
+    # Move unet, vae and text_encoder to device
+    pipeline.vae.to(args_device)
+    pipeline.text_encoder.to(args_device)
+    pipeline.unet.to(args_device)
 
     # Now we will add new LoRA weights to the attention layers
     unet_lora_config = LoraConfig(
@@ -85,8 +89,6 @@ def run(
     # load brain encoder
     loss_fn = EncoderModule.load_from_checkpoint(args_brain_encoder_ckpt, map_location=args_device)
 
-    prompt_fn = get_prompt_fn(args_prompt_filename)
-
     # generate unconditional embeddings
     prompt_embeds = pipeline.text_encoder(
         pipeline.tokenizer(
@@ -98,8 +100,19 @@ def run(
         ).input_ids.to(args_device)
     )[0]
     uncond_prompt_embeds = prompt_embeds.repeat(args_batch_size, 1, 1)
+
+    prompt_embeds = pipeline.text_encoder(
+    pipeline.tokenizer(
+        args_instance_prompt,
+        return_tensors="pt",
+        padding="max_length",
+        truncation=True,
+        max_length=pipeline.tokenizer.model_max_length,
+    ).input_ids.to(args_device)
+    )[0]   
+    cond_prompt_embeds = prompt_embeds.repeat(args_batch_size, 1, 1)
             
-    for iter_i in list(range(args_num_train_iterations)):
+    for iter_i in tqdm(range(args_num_train_iterations)):
 
         #################### VALIDATION ####################
 
@@ -156,29 +169,18 @@ def run(
 
         #################### TRAINING ####################
             
-        latent = torch.randn((args_batch_size, 4, 64, 64), device=args_device) 
+        latent = torch.randn((args_batch_size, 4, 64, 64), device=args_device)                           
 
-        # generate prompts
-        prompts = prompt_fn(args_batch_size)
-
-        cond_prompt_embeds = pipeline.text_encoder(
-        pipeline.tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding="max_length",
-            truncation=True,
-            max_length=pipeline.tokenizer.model_max_length,
-        ).input_ids.to(args_device)
-        )[0]                             
-
-        for i, t in tqdm(enumerate(pipeline.scheduler.timesteps), total=len(pipeline.scheduler.timesteps)):
+        for i, t in enumerate(pipeline.scheduler.timesteps):
 
             t = torch.tensor([t], device=args_device).repeat(args_batch_size)
 
+            uncond_prompt_embeds = uncond_prompt_embeds.detach().clone()
+            cond_prompt_embeds = cond_prompt_embeds.detach().clone()
             noise_pred_uncond = checkpoint.checkpoint(pipeline.unet, latent, t, uncond_prompt_embeds, use_reentrant=False).sample
             noise_pred_cond = checkpoint.checkpoint(pipeline.unet, latent, t, cond_prompt_embeds, use_reentrant=False).sample
 
-            timestep = random.randint(0, pipeline.scheduler.timesteps)
+            timestep = random.randint(0, args_num_timesteps)
             if i < timestep:
                 noise_pred_uncond = noise_pred_uncond.detach()
                 noise_pred_cond = noise_pred_cond.detach()
