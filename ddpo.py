@@ -9,6 +9,7 @@ from diffusers.utils import convert_state_dict_to_diffusers
 from peft.utils import get_peft_model_state_dict
 from diffusers.loaders import LoraLoaderMixin
 from utils.img_utils import save_images
+from torchvision import transforms
 from ddpo_utils import ddim_step_with_logprob, pipeline_with_logprob, get_prompt_fn
 
 
@@ -132,7 +133,6 @@ def run(
             num_inference_steps=args_num_timesteps,
             guidance_scale=args_guidance_scale,
             eta=args_eta,
-            output_type="pt",
         )
 
         latents = torch.stack(latents, dim=1)  # (batch_size, num_steps + 1, 4, 64, 64)
@@ -140,7 +140,11 @@ def run(
         timesteps = pipeline.scheduler.timesteps.repeat(args_batch_size, 1)  # (batch_size, num_steps)
 
         # compute reward
-        rewards = reward_fn(images, mode='val')
+        batch = []
+        for image in images:
+            batch.append(transforms.ToTensor()(image).unsqueeze(0))
+        batch = torch.cat(batch, dim=0).to(args_device)
+        rewards = reward_fn(batch, mode='val')
 
         samples = {
             "prompt_embeds": prompt_embeds,
@@ -166,8 +170,6 @@ def run(
                 )
             else:
                 text_encoder_state_dict = None
-
-            images = None
 
             save_folder = os.path.join(args_save_folder, f'Epoch {epoch}')
             os.makedirs(save_folder, exist_ok=True)
