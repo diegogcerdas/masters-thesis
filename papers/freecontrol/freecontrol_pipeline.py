@@ -101,7 +101,6 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
             hidden_state_dict, _, key_dict, _ = get_self_attn_feat(self.unet, pca_guidance_blocks)
             for name in hidden_state_dict.keys():
                 def log_to_dict(feat, selected_dict, name):
-                    feat = feat.chunk(2)[1]
                     if name in selected_dict.keys():
                         selected_dict[name].append(feat)
                     else:
