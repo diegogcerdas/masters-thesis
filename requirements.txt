@@ -8,5 +8,6 @@ torcheval
 plotly
 open_clip_torch
 transformers
-diffusers
+diffusers==0.26.3
 wandb
+peft
