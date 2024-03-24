@@ -12,10 +12,11 @@ from utils.img_utils import save_images
 from torchvision import transforms
 import random
 import torch.utils.checkpoint as checkpoint
+from ddpo_utils import get_prompt_fn
 
 def run(
     args_pretrained_model_name_or_path: str,
-    args_instance_prompt: str,
+    args_prompt_filename: str,
     args_num_timesteps: int,
     args_guidance_scale: float,
     args_lora_rank: int,
@@ -84,7 +85,9 @@ def run(
     # load brain encoder
     loss_fn = EncoderModule.load_from_checkpoint(args_brain_encoder_ckpt, map_location=args_device)
 
-    # generate prompt embeddings
+    prompt_fn = get_prompt_fn(args_prompt_filename)
+
+    # generate unconditional embeddings
     prompt_embeds = pipeline.text_encoder(
         pipeline.tokenizer(
             [""],
@@ -95,21 +98,78 @@ def run(
         ).input_ids.to(args_device)
     )[0]
     uncond_prompt_embeds = prompt_embeds.repeat(args_batch_size, 1, 1)
+            
+    for iter_i in list(range(args_num_train_iterations)):
 
-    prompt_embeds = pipeline.text_encoder(
+        #################### VALIDATION ####################
+
+        if iter_i % args_validation_iters == 0:
+            
+            pipeline_val = StableDiffusionPipeline.from_pretrained(
+                args_pretrained_model_name_or_path,
+                unet=pipeline.unet,
+                text_encoder=pipeline.text_encoder,
+            )
+            pipeline_args = {
+                "prompt": args_validation_prompt,
+                "num_inference_steps": args_num_timesteps,
+            }
+
+            pipeline_val.scheduler = DDIMScheduler.from_config(pipeline_val.scheduler.config)
+            pipeline_val = pipeline_val.to(args_device)
+            pipeline_val.set_progress_bar_config(disable=True)
+
+            # Run inference
+            generator = torch.Generator(device=args_device).manual_seed(args_seed)
+            images = []
+            for _ in range(args_validation_images):
+                with torch.cuda.amp.autocast():
+                    image = pipeline_val(**pipeline_args, generator=generator).images[0]
+                    images.append(image)
+
+            batch = []
+            for image in images:
+                batch.append(transforms.ToTensor()(image).unsqueeze(0))
+            batch = torch.cat(batch, dim=0).to(args_device)
+            pred = loss_fn(batch, mode='val').mean()
+            print(f'{iter_i}: Validation pred: {pred.item()}')
+
+            unet_lora_state_dict = convert_state_dict_to_diffusers(
+                get_peft_model_state_dict(pipeline.unet)
+            )
+
+            if args_train_text_encoder:
+                text_encoder_state_dict = convert_state_dict_to_diffusers(
+                    get_peft_model_state_dict(pipeline.text_encoder)
+                )
+            else:
+                text_encoder_state_dict = None
+
+            save_folder = os.path.join(args_save_folder, f'Iters {iter_i}')
+            os.makedirs(save_folder, exist_ok=True)
+            save_images(images, save_folder)
+            LoraLoaderMixin.save_lora_weights(
+                save_directory=save_folder,
+                unet_lora_layers=unet_lora_state_dict,
+                text_encoder_lora_layers=text_encoder_state_dict,
+            )          
+
+        #################### TRAINING ####################
+            
+        latent = torch.randn((args_batch_size, 4, 64, 64), device=args_device) 
+
+        # generate prompts
+        prompts = prompt_fn(args_batch_size)
+
+        cond_prompt_embeds = pipeline.text_encoder(
         pipeline.tokenizer(
-            args_instance_prompt,
+            prompts,
             return_tensors="pt",
             padding="max_length",
             truncation=True,
             max_length=pipeline.tokenizer.model_max_length,
         ).input_ids.to(args_device)
-    )[0]
-    cond_prompt_embeds = prompt_embeds.repeat(args_batch_size, 1, 1) 
-            
-    for iter_i in list(range(args_num_train_iterations)):
-            
-        latent = torch.randn((args_batch_size, 4, 64, 64), device=args_device)                                
+        )[0]                             
 
         for i, t in tqdm(enumerate(pipeline.scheduler.timesteps), total=len(pipeline.scheduler.timesteps)):
 
@@ -136,63 +196,3 @@ def run(
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()    
-
-        if iter_i % args_validation_iters == 0:
-            
-            pipeline_val = StableDiffusionPipeline.from_pretrained(
-                args_pretrained_model_name_or_path,
-                unet=pipeline.unet,
-                text_encoder=pipeline.text_encoder,
-            )
-            pipeline_args = {
-                "prompt": args_validation_prompt,
-                "num_inference_steps": args_num_timesteps,
-            }
-
-            # If we were previously predicting a variance, we need the scheduler to ignore it
-            scheduler_args = {}
-            if "variance_type" in pipeline_val.scheduler.config:
-                variance_type = pipeline_val.scheduler.config.variance_type
-                if variance_type in ["learned", "learned_range"]:
-                    variance_type = "fixed_small"
-                scheduler_args["variance_type"] = variance_type
-            pipeline_val.scheduler = DPMSolverMultistepScheduler.from_config(
-                pipeline_val.scheduler.config, **scheduler_args
-            )
-            pipeline_val = pipeline_val.to(args_device)
-            pipeline_val.set_progress_bar_config(disable=True)
-
-            # Run inference
-            generator = torch.Generator(device=args_device).manual_seed(args_seed)
-            images = []
-            for _ in range(args_validation_images):
-                with torch.cuda.amp.autocast():
-                    image = pipeline_val(**pipeline_args, generator=generator).images[0]
-                    images.append(image)
-
-            batch = []
-            for image in images:
-                batch.append(transforms.ToTensor()(image).unsqueeze(0))
-            batch = torch.cat(batch, dim=0).to(args_device)
-            pred = loss_fn(batch, mode='val').mean()
-            print(f'{iter_i}: Validation pred: {pred.item()}')
-
-            unet_lora_state_dict = convert_state_dict_to_diffusers(
-                get_peft_model_state_dict(pipeline.unet)
-            )
-
-            if args_train_text_encoder:
-                text_encoder_state_dict = convert_state_dict_to_diffusers(
-                    get_peft_model_state_dict(pipeline_val.text_encoder)
-                )
-            else:
-                text_encoder_state_dict = None
-
-            save_folder = os.path.join(args_save_folder, f'Iters {iter_i}')
-            os.makedirs(save_folder, exist_ok=True)
-            save_images(images, save_folder)
-            LoraLoaderMixin.save_lora_weights(
-                save_directory=save_folder,
-                unet_lora_layers=unet_lora_state_dict,
-                text_encoder_lora_layers=text_encoder_state_dict,
-            )          
