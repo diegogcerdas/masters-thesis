@@ -104,8 +104,6 @@ def run(
     )[0]
     uncond_prompt_embeds = prompt_embeds.repeat(args_batch_size, 1, 1)
 
-    autocast = contextlib.nullcontext
-
     # Train!
     for epoch in range(args_num_epochs):
         
@@ -115,21 +113,22 @@ def run(
         if args_train_text_encoder:
             pipeline.text_encoder.eval()
 
-        # generate prompts
-        prompts = prompt_fn(args_batch_size)
+        with torch.no_grad():
 
-        # encode prompts
-        prompt_ids = pipeline.tokenizer(
-            prompts,
-            return_tensors="pt",
-            padding="max_length",
-            truncation=True,
-            max_length=pipeline.tokenizer.model_max_length,
-        ).input_ids.to(args_device)
-        prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
+            # generate prompts
+            prompts = prompt_fn(args_batch_size)
 
-        # sample
-        with autocast():
+            # encode prompts
+            prompt_ids = pipeline.tokenizer(
+                prompts,
+                return_tensors="pt",
+                padding="max_length",
+                truncation=True,
+                max_length=pipeline.tokenizer.model_max_length,
+            ).input_ids.to(args_device)
+            prompt_embeds = pipeline.text_encoder(prompt_ids)[0]
+
+            # sample
             images, _, latents, log_probs = pipeline_with_logprob(
                 pipeline,
                 prompt_embeds=prompt_embeds,
@@ -139,50 +138,50 @@ def run(
                 eta=args_eta,
             )
 
-        latents = torch.stack(latents, dim=1)  # (batch_size, num_steps + 1, 4, 64, 64)
-        log_probs = torch.stack(log_probs, dim=1)  # (batch_size, num_steps, 1)
-        timesteps = pipeline.scheduler.timesteps.repeat(args_batch_size, 1)  # (batch_size, num_steps)
+            latents = torch.stack(latents, dim=1)  # (batch_size, num_steps + 1, 4, 64, 64)
+            log_probs = torch.stack(log_probs, dim=1)  # (batch_size, num_steps, 1)
+            timesteps = pipeline.scheduler.timesteps.repeat(args_batch_size, 1)  # (batch_size, num_steps)
 
-        # compute reward
-        batch = []
-        for image in images:
-            batch.append(transforms.ToTensor()(image).unsqueeze(0))
-        batch = torch.cat(batch, dim=0).to(args_device)
-        rewards = reward_fn(batch, mode='val')
+            # compute reward
+            batch = []
+            for image in images:
+                batch.append(transforms.ToTensor()(image).unsqueeze(0))
+            batch = torch.cat(batch, dim=0).to(args_device)
+            rewards = reward_fn(batch, mode='val')
 
-        samples = {
-            "prompt_embeds": prompt_embeds,
-            "timesteps": timesteps,
-            "latents": latents[:, :-1],  # each entry is the latent before timestep t
-            "next_latents": latents[:, 1:],  # each entry is the latent after timestep t
-            "log_probs": log_probs,
-            "advantages": (rewards - rewards.mean()) / (rewards.std() + 1e-8),
-        }
+            samples = {
+                "prompt_embeds": prompt_embeds,
+                "timesteps": timesteps,
+                "latents": latents[:, :-1],  # each entry is the latent before timestep t
+                "next_latents": latents[:, 1:],  # each entry is the latent after timestep t
+                "log_probs": log_probs,
+                "advantages": (rewards - rewards.mean()) / (rewards.std() + 1e-8),
+            }
 
-        # log rewards
-        print(f'{epoch}: reward mean: {rewards.mean().item()}, std: {rewards.std().item()}')
+            # log rewards
+            print(f'{epoch}: reward mean: {rewards.mean().item()}, std: {rewards.std().item()}')
 
-        if epoch % args_validation_epochs == 0:
+            if epoch % args_validation_epochs == 0:
 
-            unet_lora_state_dict = convert_state_dict_to_diffusers(
-                get_peft_model_state_dict(pipeline.unet)
-            )
-
-            if args_train_text_encoder:
-                text_encoder_state_dict = convert_state_dict_to_diffusers(
-                    get_peft_model_state_dict(pipeline.text_encoder)
+                unet_lora_state_dict = convert_state_dict_to_diffusers(
+                    get_peft_model_state_dict(pipeline.unet)
                 )
-            else:
-                text_encoder_state_dict = None
 
-            save_folder = os.path.join(args_save_folder, f'Epoch {epoch}')
-            os.makedirs(save_folder, exist_ok=True)
-            save_images(images, save_folder)
-            LoraLoaderMixin.save_lora_weights(
-                save_directory=save_folder,
-                unet_lora_layers=unet_lora_state_dict,
-                text_encoder_lora_layers=text_encoder_state_dict,
-            )          
+                if args_train_text_encoder:
+                    text_encoder_state_dict = convert_state_dict_to_diffusers(
+                        get_peft_model_state_dict(pipeline.text_encoder)
+                    )
+                else:
+                    text_encoder_state_dict = None
+
+                save_folder = os.path.join(args_save_folder, f'Epoch {epoch}')
+                os.makedirs(save_folder, exist_ok=True)
+                save_images(images, save_folder)
+                LoraLoaderMixin.save_lora_weights(
+                    save_directory=save_folder,
+                    unet_lora_layers=unet_lora_state_dict,
+                    text_encoder_lora_layers=text_encoder_state_dict,
+                )          
 
         #################### TRAINING ####################
             
@@ -190,7 +189,7 @@ def run(
             
             # shuffle samples along batch dimension
             perm = torch.randperm(args_batch_size, device=args_device)
-            samples = {k: v[perm] for k, v in samples.items()}
+            samples = {k: v[perm].detach().clone() for k, v in samples.items()}
 
             # shuffle along time dimension independently for each sample
             perms = torch.stack([
@@ -221,33 +220,34 @@ def run(
 
             for i, sample in tqdm(enumerate(samples_batched), desc=f"Epoch {epoch}.{inner_epoch}: training"):
                 
+                uncond_prompt_embeds = uncond_prompt_embeds.detach().clone()
                 embeds = torch.cat([uncond_prompt_embeds, sample["prompt_embeds"]])
 
                 for j in tqdm(range(args_num_timesteps), desc="Timestep"):
 
-                    with autocast():
+                    embeds = embeds.detach().clone()
 
-                        noise_pred = pipeline.unet(
-                            torch.cat([sample["latents"][:, j]] * 2),
-                            torch.cat([sample["timesteps"][:, j]] * 2),
-                            embeds,
-                        ).sample
-                        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                        noise_pred = (
-                            noise_pred_uncond
-                            + args_guidance_scale
-                            * (noise_pred_text - noise_pred_uncond)
-                        )
+                    noise_pred = pipeline.unet(
+                        torch.cat([sample["latents"][:, j]] * 2),
+                        torch.cat([sample["timesteps"][:, j]] * 2),
+                        embeds,
+                    ).sample
+                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                    noise_pred = (
+                        noise_pred_uncond
+                        + args_guidance_scale
+                        * (noise_pred_text - noise_pred_uncond)
+                    )
 
-                        # compute the log prob of next_latents given latents under the current model
-                        _, log_prob = ddim_step_with_logprob(
-                            pipeline.scheduler,
-                            noise_pred,
-                            sample["timesteps"][:, j],
-                            sample["latents"][:, j],
-                            eta=args_eta,
-                            prev_sample=sample["next_latents"][:, j],
-                        )
+                    # compute the log prob of next_latents given latents under the current model
+                    _, log_prob = ddim_step_with_logprob(
+                        pipeline.scheduler,
+                        noise_pred,
+                        sample["timesteps"][:, j],
+                        sample["latents"][:, j],
+                        eta=args_eta,
+                        prev_sample=sample["next_latents"][:, j],
+                    )
 
                     # ppo logic
                     advantages = torch.clamp(
