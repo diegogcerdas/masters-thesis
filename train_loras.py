@@ -135,12 +135,12 @@ def run(
 
                 images = []
                 generator = torch.Generator(device=args_device).manual_seed(args_seed)
-                for _ in args_num_val_images:
+                for _ in range(args_num_val_images):
                     with torch.cuda.amp.autocast():
                         image = pipe(**pipeline_args, generator=generator).images[0]
                         images.append(image)
             
-                save_folder = os.path.join(args_save_folder, f'Epoch {epoch} alpha {alpha}')
+                save_folder = os.path.join(args_save_folder, f'Epoch {epoch}', f'Alpha {alpha:.1f}')
                 os.makedirs(save_folder, exist_ok=True)
                 save_images(images, save_folder)
 
