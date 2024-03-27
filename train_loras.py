@@ -7,6 +7,7 @@ from torchvision import transforms
 from PIL import Image
 import torch.nn.functional as F
 from utils.img_utils import save_images
+from tqdm import tqdm
 
 
 def run(
@@ -112,7 +113,7 @@ def run(
             ]
         )
 
-    for epoch in range(args_num_epochs):
+    for epoch in tqdm(range(args_num_epochs)):
 
         #################### VALIDATION ####################
 
