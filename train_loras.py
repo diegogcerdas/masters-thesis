@@ -44,6 +44,22 @@ def run(
     pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
     pipe.scheduler.set_timesteps(args_num_timesteps)
 
+    pipeline_args = {
+        "prompt": args_validation_prompt,
+        "num_inference_steps": args_num_timesteps,
+    }
+
+    images = []
+    generator = torch.Generator(device=args_device).manual_seed(args_seed)
+    for _ in range(args_num_val_images):
+        with torch.cuda.amp.autocast():
+            image = pipe(**pipeline_args, generator=generator).images[0]
+            images.append(image)
+
+    save_folder = os.path.join(args_save_folder, 'Original')
+    os.makedirs(save_folder, exist_ok=True)
+    save_images(images, save_folder)
+
     # Now we will add new LoRA weights to the attention layers
     unet_lora_config_1 = LoraConfig(
         r=args_lora_rank,
