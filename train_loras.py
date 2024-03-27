@@ -155,72 +155,87 @@ def run(
         data_f = np.array(filenames)[order]
         data_a = np.array(alphas)[order]
 
-        for file, alpha in zip(data_f, data_a):
+        for lora_name1, lora_name2 in [("lora_1", "lora_2"), ("lora_1", "lora_2")]:
             
-            # Adjust adapter weights
-            pipe.set_adapters(["lora_1", "lora_2"], adapter_weights=[1 - alpha, alpha])
-            
-            # Prepare model input
-            img = image_transforms(Image.open(file)).unsqueeze(0).to(args_device)
-            model_input = pipe.vae.encode(img).latent_dist.sample()
-            model_input = model_input * pipe.vae.config.scaling_factor
+            for name, param in pipe.unet.named_parameters():
+                if lora_name1 in name:
+                    param.requires_grad_(False)
+                if lora_name2 in name:
+                    param.requires_grad_(True)
 
-            # Sample noise that we'll add to the latents
-            noise = torch.randn_like(model_input)
-            bsz, channels, _, _ = model_input.shape
+            if args_train_text_encoder:
+                for name, param in pipe.text_encoder.named_parameters():
+                    if lora_name1 in name:
+                        param.requires_grad_(False)
+                    if lora_name2 in name:
+                        param.requires_grad_(True)
 
-            # Sample a random timestep for each image
-            timesteps = torch.randint(
-                0,
-                pipe.scheduler.config.num_train_timesteps,
-                (bsz,),
-                device=model_input.device,
-            )
-            timesteps = timesteps.long()
+            for file, alpha in zip(data_f, data_a):
+                
+                # Adjust adapter weights
+                pipe.set_adapters(["lora_1", "lora_2"], adapter_weights=[1 - alpha, alpha])
+                
+                # Prepare model input
+                img = image_transforms(Image.open(file)).unsqueeze(0).to(args_device)
+                model_input = pipe.vae.encode(img).latent_dist.sample()
+                model_input = model_input * pipe.vae.config.scaling_factor
 
-            # Add noise to the model input according to the noise magnitude at each timestep
-            # (this is the forward diffusion process)
-            noisy_model_input = pipe.scheduler.add_noise(model_input, noise, timesteps)
+                # Sample noise that we'll add to the latents
+                noise = torch.randn_like(model_input)
+                bsz, channels, _, _ = model_input.shape
 
-            # Get the text embedding for conditioning
-            prompt_ids = pipe.tokenizer(
-                args_instance_prompt,
-                return_tensors="pt",
-                padding="max_length",
-                truncation=True,
-                max_length=pipe.tokenizer.model_max_length,
-            ).input_ids.to(args_device)       
-            prompt_embeds = pipe.text_encoder(prompt_ids)[0]
-
-            # Predict the noise residual
-            if pipe.unet.config.in_channels == channels * 2:
-                noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
-            model_pred = pipe.unet(
-                noisy_model_input,
-                timesteps,
-                prompt_embeds,
-                return_dict=False,
-            )[0]
-
-            # if model predicts variance, throw away the prediction. we will only train on the
-            # simplified training objective. This means that all schedulers using the fine tuned
-            # model must be configured to use one of the fixed variance variance types.
-            if model_pred.shape[1] == 6:
-                model_pred, _ = torch.chunk(model_pred, 2, dim=1)
-
-            # Get the target for loss depending on the prediction type
-            if pipe.scheduler.config.prediction_type == "epsilon":
-                target = noise
-            elif pipe.scheduler.config.prediction_type == "v_prediction":
-                target = pipe.scheduler.get_velocity(model_input, noise, timesteps)
-            else:
-                raise ValueError(
-                    f"Unknown prediction type {pipe.scheduler.config.prediction_type}"
+                # Sample a random timestep for each image
+                timesteps = torch.randint(
+                    0,
+                    pipe.scheduler.config.num_train_timesteps,
+                    (bsz,),
+                    device=model_input.device,
                 )
+                timesteps = timesteps.long()
 
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                # Add noise to the model input according to the noise magnitude at each timestep
+                # (this is the forward diffusion process)
+                noisy_model_input = pipe.scheduler.add_noise(model_input, noise, timesteps)
 
-            # backward pass
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()    
+                # Get the text embedding for conditioning
+                prompt_ids = pipe.tokenizer(
+                    args_instance_prompt,
+                    return_tensors="pt",
+                    padding="max_length",
+                    truncation=True,
+                    max_length=pipe.tokenizer.model_max_length,
+                ).input_ids.to(args_device)       
+                prompt_embeds = pipe.text_encoder(prompt_ids)[0]
+
+                # Predict the noise residual
+                if pipe.unet.config.in_channels == channels * 2:
+                    noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
+                model_pred = pipe.unet(
+                    noisy_model_input,
+                    timesteps,
+                    prompt_embeds,
+                    return_dict=False,
+                )[0]
+
+                # if model predicts variance, throw away the prediction. we will only train on the
+                # simplified training objective. This means that all schedulers using the fine tuned
+                # model must be configured to use one of the fixed variance variance types.
+                if model_pred.shape[1] == 6:
+                    model_pred, _ = torch.chunk(model_pred, 2, dim=1)
+
+                # Get the target for loss depending on the prediction type
+                if pipe.scheduler.config.prediction_type == "epsilon":
+                    target = noise
+                elif pipe.scheduler.config.prediction_type == "v_prediction":
+                    target = pipe.scheduler.get_velocity(model_input, noise, timesteps)
+                else:
+                    raise ValueError(
+                        f"Unknown prediction type {pipe.scheduler.config.prediction_type}"
+                    )
+
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                # backward pass
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()    
