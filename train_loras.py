@@ -102,7 +102,8 @@ def run(
     # Prepare dataset
     filenames = [int(f.replace(".png", "")) for f in os.listdir(args_data_dir) if f.endswith(".png")]
     filenames = [os.path.join(args_data_dir, f"{n}.png") for n in sorted(filenames)]
-    alphas = np.linspace(0, 1, len(filenames))
+    bins = np.linspace(0, 1, 11)
+    alphas = bins[(np.digitize(np.linspace(0, 1.1, len(filenames)), bins) - 1)]
     image_transforms = transforms.Compose(
             [
                 transforms.Resize(
@@ -122,9 +123,8 @@ def run(
             pipe.unet.eval()
             if args_train_text_encoder:
                 pipe.text_encoder.eval()
-
-            images = []
-            for alpha in np.linspace(0, 1, args_num_val_images):
+            
+            for alpha in bins:
 
                 pipe.set_adapters(["lora_1", "lora_2"], adapter_weights=[1 - alpha, alpha])
 
@@ -132,14 +132,17 @@ def run(
                     "prompt": args_validation_prompt,
                     "num_inference_steps": args_num_timesteps,
                 }
+
+                images = []
                 generator = torch.Generator(device=args_device).manual_seed(args_seed)
-                with torch.cuda.amp.autocast():
-                    image = pipe(**pipeline_args, generator=generator).images[0]
-                    images.append(image)
+                for _ in args_num_val_images:
+                    with torch.cuda.amp.autocast():
+                        image = pipe(**pipeline_args, generator=generator).images[0]
+                        images.append(image)
             
-            save_folder = os.path.join(args_save_folder, f'Epoch {epoch}')
-            os.makedirs(save_folder, exist_ok=True)
-            save_images(images, save_folder)
+                save_folder = os.path.join(args_save_folder, f'Epoch {epoch} alpha {alpha}')
+                os.makedirs(save_folder, exist_ok=True)
+                save_images(images, save_folder)
 
 
         #################### TRAINING ####################
@@ -169,7 +172,7 @@ def run(
             # Sample a random timestep for each image
             timesteps = torch.randint(
                 0,
-                pipe.noise_scheduler.config.num_train_timesteps,
+                pipe.scheduler.config.num_train_timesteps,
                 (bsz,),
                 device=model_input.device,
             )
@@ -177,11 +180,17 @@ def run(
 
             # Add noise to the model input according to the noise magnitude at each timestep
             # (this is the forward diffusion process)
-            noisy_model_input = pipe.noise_scheduler.add_noise(model_input, noise, timesteps)
+            noisy_model_input = pipe.scheduler.add_noise(model_input, noise, timesteps)
 
             # Get the text embedding for conditioning
-            input_ids = pipe.tokenize_prompt(args_instance_prompt).input_ids
-            encoder_hidden_states = pipe.encode_prompt(input_ids).to(args_device)
+            prompt_ids = pipe.tokenizer(
+                args_instance_prompt,
+                return_tensors="pt",
+                padding="max_length",
+                truncation=True,
+                max_length=pipe.tokenizer.model_max_length,
+            ).input_ids.to(args_device)       
+            prompt_embeds = pipe.text_encoder(prompt_ids)[0]
 
             # Predict the noise residual
             if pipe.unet.config.in_channels == channels * 2:
@@ -189,7 +198,7 @@ def run(
             model_pred = pipe.unet(
                 noisy_model_input,
                 timesteps,
-                encoder_hidden_states,
+                prompt_embeds,
                 return_dict=False,
             )[0]
 
@@ -200,13 +209,13 @@ def run(
                 model_pred, _ = torch.chunk(model_pred, 2, dim=1)
 
             # Get the target for loss depending on the prediction type
-            if pipe.noise_scheduler.config.prediction_type == "epsilon":
+            if pipe.scheduler.config.prediction_type == "epsilon":
                 target = noise
-            elif pipe.noise_scheduler.config.prediction_type == "v_prediction":
-                target = pipe.noise_scheduler.get_velocity(model_input, noise, timesteps)
+            elif pipe.scheduler.config.prediction_type == "v_prediction":
+                target = pipe.scheduler.get_velocity(model_input, noise, timesteps)
             else:
                 raise ValueError(
-                    f"Unknown prediction type {pipe.noise_scheduler.config.prediction_type}"
+                    f"Unknown prediction type {pipe.scheduler.config.prediction_type}"
                 )
 
             loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
