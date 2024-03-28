@@ -1,13 +1,11 @@
-import contextlib
 import os
 import urllib.request
 import zipfile
+from typing import List
 
-import nltk
+import ijson
 import pandas as pd
-from nltk.corpus import wordnet as wn
 from pycocotools.coco import COCO
-
 
 def download_coco_annotation_file(data_root: str):
     url = "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
@@ -16,49 +14,28 @@ def download_coco_annotation_file(data_root: str):
     zip_file_object.extractall(path=data_root)
 
 
-def coco_annotation(coco_id: int, data_root: str, expanded_nouns: bool = False):
-    coco_annotation_file = os.path.join(data_root, "annotations", "{}_{}.json")
-    # Download from https://natural-scenes-dataset.s3.amazonaws.com/index.html#nsddata/experiments/nsd/
-    # and place in data_root
-    stim_descriptions = pd.read_csv(
-        os.path.join(data_root, "nsd_stim_info_merged.csv"), index_col=0
-    )
-    subj_info = stim_descriptions.iloc[coco_id]
-    annot_file = coco_annotation_file.format("captions", subj_info["cocoSplit"])
-    with contextlib.redirect_stdout(None):
-        coco = COCO(annot_file)
-    coco_annot_IDs = coco.getAnnIds([subj_info["cocoId"]])
-    coco_annot = coco.loadAnns(coco_annot_IDs)
+def coco_categories(coco_img_idxs: List[int], data_root: str):
+    stim_descriptions = pd.read_csv(os.path.join(data_root, "nsd_stim_info_merged.csv"), index_col=0)
 
-    if expanded_nouns:
-        nouns = set()
+    annot_file = {
+        'train2017': os.path.join(data_root, "annotations", "instances_train2017.json"),
+        'val2017': os.path.join(data_root, "annotations", "instances_val2017.json"),
+    }
+    labels = {
+        k: {l['id']: {'name': l['name'], 'supercategory': l['supercategory']} for l in (o for o in ijson.items(open(v,'r'), 'categories.item'))} for k, v in annot_file.items()
+    }
+    coco = {
+        k: COCO(v) for k, v in annot_file.items()
+    }
+
+    categories = []
+    for coco_img_idx in coco_img_idxs:
+        split = stim_descriptions.iloc[coco_img_idx]['cocoSplit']
+        coco_annot_IDs = coco[split].getAnnIds([stim_descriptions.iloc[coco_img_idx]["cocoId"]])
+        coco_annot = coco[split].loadAnns(coco_annot_IDs)
+        cat = set()
         for annot in coco_annot:
-            caption = annot["caption"]
-            tokens = nltk.tokenize.word_tokenize(str(caption).lower())
-            pos_tags = nltk.pos_tag(tokens)
-            nns = [word for word, pos in pos_tags if pos == "NN"]
-            nouns.update(nns)
-            for n in nns:
-                synsets = wn.synsets(n)
-                if len(synsets) == 0:
-                    continue
-                hypernyms = hypernymy(n)
-                nouns.update(hypernyms)
-        return coco_annot, list(nouns)
-    return coco_annot
-
-
-def hypernymy(word: str):
-    synset = wn.synsets(word)[0]
-    h = lambda s: s.hypernyms()
-    seen = set()
-
-    def recurse(s):
-        name = s.name().split(".")[0]
-        if not name in seen:
-            seen.add(name)
-            for s1 in h(s):
-                recurse(s1)
-
-    recurse(synset)
-    return list(seen)
+            if annot['area'] > 1000:
+                cat.update([labels[split][annot['category_id']]['name'], labels[split][annot['category_id']]['supercategory']])
+        categories.append(list(cat))
+    return categories

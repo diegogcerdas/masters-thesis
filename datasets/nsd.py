@@ -69,11 +69,11 @@ class NaturalScenesDataset(data.Dataset):
     def __getitem__(self, idx):
         img = Image.open(os.path.join(self.root, self.df.iloc[idx]["filename"]))
         img = transforms.ToTensor()(img).float()
-        coco_id = self.df.iloc[idx]["coco_id"]
+        coco_img_idx = self.df.iloc[idx]["coco_img_idx"]
         if self.partition == "train":
             activation = self.fmri_data[idx, self.roi_indices]
-            return img, activation, coco_id
-        return img, coco_id
+            return img, activation, coco_img_idx
+        return img, coco_img_idx
 
     def build_image_info_df(self):
         subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
@@ -84,15 +84,15 @@ class NaturalScenesDataset(data.Dataset):
             data = []
             training_dir = os.path.join(subj_dir, "training_split", "training_images")
             for filename in os.listdir(training_dir):
-                coco_id = int(filename.split("_")[1].split(".")[0][-5:])
+                coco_img_idx = int(filename.split("_")[1].split(".")[0][-5:])
                 filename = os.path.join(training_dir.replace(self.root, ""), filename)
-                data.append([filename, "train", coco_id])
+                data.append([filename, "train", coco_img_idx])
             testing_dir = os.path.join(subj_dir, "test_split", "test_images")
             for filename in os.listdir(testing_dir):
-                coco_id = int(filename.split("_")[1].split(".")[0][-5:])
+                coco_img_idx = int(filename.split("_")[1].split(".")[0][-5:])
                 filename = os.path.join(testing_dir.replace(self.root, ""), filename)
-                data.append([filename, "test", coco_id])
-            df = pd.DataFrame(data, columns=["filename", "partition", "coco_id"])
+                data.append([filename, "test", coco_img_idx])
+            df = pd.DataFrame(data, columns=["filename", "partition", "coco_img_idx"])
             df = df.sort_values(by=["partition", "filename"])
             df.to_csv(data_info_path, index=False)
         return df
