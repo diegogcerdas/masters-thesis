@@ -8,12 +8,16 @@ from PIL import Image
 import torch.nn.functional as F
 from utils.img_utils import save_images
 from tqdm import tqdm
+from diffusers.loaders import LoraLoaderMixin
+from diffusers.utils import convert_state_dict_to_diffusers
+from peft.utils import get_peft_model_state_dict
 
 
 def run(
     args_pretrained_model_name_or_path: str,
     args_data_dir: str,
     args_instance_prompt: str,
+    args_invert_alphas: bool,
     args_num_timesteps: int,
     args_lora_rank: int,
     args_train_text_encoder: bool,
@@ -23,6 +27,8 @@ def run(
     args_save_folder: str,
     args_resolution: int,
     args_num_epochs: int,
+    args_num_inner_epochs: int,
+    args_batch_size: int,
     args_learning_rate: float,
     args_seed: int,
     args_device: str,
@@ -44,24 +50,8 @@ def run(
     pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
     pipe.scheduler.set_timesteps(args_num_timesteps)
 
-    pipeline_args = {
-        "prompt": args_validation_prompt,
-        "num_inference_steps": args_num_timesteps,
-    }
-
-    images = []
-    generator = torch.Generator(device=args_device).manual_seed(args_seed)
-    for _ in range(args_num_val_images):
-        with torch.cuda.amp.autocast():
-            image = pipe(**pipeline_args, generator=generator).images[0]
-            images.append(image)
-
-    save_folder = os.path.join(args_save_folder, 'Original')
-    os.makedirs(save_folder, exist_ok=True)
-    save_images(images, save_folder)
-
     # Now we will add new LoRA weights to the attention layers
-    unet_lora_config_1 = LoraConfig(
+    unet_lora_config = LoraConfig(
         r=args_lora_rank,
         lora_alpha=args_lora_rank,
         init_lora_weights="gaussian",
@@ -74,40 +64,17 @@ def run(
             "add_v_proj",
         ],
     )
-    pipe.unet.add_adapter(unet_lora_config_1, adapter_name="lora_1")
-
-    unet_lora_config_2 = LoraConfig(
-        r=args_lora_rank,
-        lora_alpha=args_lora_rank,
-        init_lora_weights="gaussian",
-        target_modules=[
-            "to_k",
-            "to_q",
-            "to_v",
-            "to_out.0",
-            "add_k_proj",
-            "add_v_proj",
-        ],
-    )
-    pipe.unet.add_adapter(unet_lora_config_2, adapter_name="lora_2")
+    pipe.unet.add_adapter(unet_lora_config, adapter_name="lora")
 
     # The text encoder comes from 🤗 transformers, we will also attach adapters to it.
     if args_train_text_encoder:
-        text_lora_config_1 = LoraConfig(
+        text_lora_config = LoraConfig(
             r=args_lora_rank,
             lora_alpha=args_lora_rank,
             init_lora_weights="gaussian",
             target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
         )
-        pipe.text_encoder.add_adapter(text_lora_config_1, adapter_name="lora_1")
-
-        text_lora_config_2 = LoraConfig(
-            r=args_lora_rank,
-            lora_alpha=args_lora_rank,
-            init_lora_weights="gaussian",
-            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
-        )
-        pipe.text_encoder.add_adapter(text_lora_config_2, adapter_name="lora_2")
+        pipe.text_encoder.add_adapter(text_lora_config, adapter_name="lora")
 
     # Initialize the optimizer
     params_to_optimize = list(filter(lambda p: p.requires_grad, pipe.unet.parameters()))
@@ -120,6 +87,9 @@ def run(
     filenames = [os.path.join(args_data_dir, f"{n}.png") for n in sorted(filenames)]
     bins = np.linspace(0, 1, 11)
     alphas = bins[(np.digitize(np.linspace(0, 1.1, len(filenames)), bins) - 1)]
+    if args_invert_alphas:
+        alphas = alphas[::-1]
+    args_batch_size = min(args_batch_size, len(np.where(alphas == alphas[0])[0]))
     image_transforms = transforms.Compose(
             [
                 transforms.Resize(
@@ -142,24 +112,42 @@ def run(
             
             for alpha in bins:
 
-                pipe.set_adapters(["lora_1", "lora_2"], adapter_weights=[1 - alpha, alpha])
-
                 pipeline_args = {
                     "prompt": args_validation_prompt,
                     "num_inference_steps": args_num_timesteps,
                 }
 
+                cross_attention_kwargs = {'scale': alpha}
+
                 images = []
                 generator = torch.Generator(device=args_device).manual_seed(args_seed)
                 for _ in range(args_num_val_images):
                     with torch.cuda.amp.autocast():
-                        image = pipe(**pipeline_args, generator=generator).images[0]
+                        image = pipe(**pipeline_args, generator=generator, cross_attention_kwargs=cross_attention_kwargs).images[0]
                         images.append(image)
             
-                save_folder = os.path.join(args_save_folder, f'Epoch {epoch}', f'Alpha {alpha:.1f}')
-                os.makedirs(save_folder, exist_ok=True)
-                save_images(images, save_folder)
+                save_folder = os.path.join(args_save_folder, f'Epoch {epoch}')
+                save_folder_alpha = os.path.join(save_folder, f'Alpha {alpha:.1f}')
+                os.makedirs(save_folder_alpha, exist_ok=True)
+                save_images(images, save_folder_alpha)
+        
+            unet_lora_state_dict = convert_state_dict_to_diffusers(
+                get_peft_model_state_dict(pipe.unet)
+            )
 
+            if args_train_text_encoder:
+                text_encoder_state_dict = convert_state_dict_to_diffusers(
+                    get_peft_model_state_dict(pipe.text_encoder)
+                )
+            else:
+                text_encoder_state_dict = None
+
+            os.makedirs(save_folder, exist_ok=True)
+            LoraLoaderMixin.save_lora_weights(
+                save_directory=save_folder,
+                unet_lora_layers=unet_lora_state_dict,
+                text_encoder_lora_layers=text_encoder_state_dict,
+            )
 
         #################### TRAINING ####################
 
@@ -167,91 +155,75 @@ def run(
         if args_train_text_encoder:
             pipe.text_encoder.train()
 
-        order = np.random.permutation(len(filenames))
-        data_f = np.array(filenames)[order]
-        data_a = np.array(alphas)[order]
+        perm_bins = np.random.permutation(bins)
 
-        for lora_name1, lora_name2 in [("lora_1", "lora_2"), ("lora_1", "lora_2")]:
+        for inner_epoch in range(args_num_inner_epochs):
+
+            chosen_alpha = perm_bins[inner_epoch % len(perm_bins)]
+            chosen_idxs = np.random.choice(np.where(alphas == chosen_alpha)[0], size=args_batch_size, replace=False)
+            imgs = [Image.open(f).convert("RGB") for f in np.array(filenames)[chosen_idxs]]
+            imgs = torch.stack([image_transforms(img).to(args_device) for img in imgs])
             
-            for name, param in pipe.unet.named_parameters():
-                if lora_name1 in name:
-                    param.requires_grad_(False)
-                if lora_name2 in name:
-                    param.requires_grad_(True)
+            # Prepare model input
+            model_input = pipe.vae.encode(imgs).latent_dist.sample()
+            model_input = model_input * pipe.vae.config.scaling_factor
 
-            if args_train_text_encoder:
-                for name, param in pipe.text_encoder.named_parameters():
-                    if lora_name1 in name:
-                        param.requires_grad_(False)
-                    if lora_name2 in name:
-                        param.requires_grad_(True)
+            # Sample noise that we'll add to the latents
+            noise = torch.randn_like(model_input)
+            bsz, channels, _, _ = model_input.shape
 
-            for file, alpha in zip(data_f, data_a):
-                
-                # Adjust adapter weights
-                pipe.set_adapters(["lora_1", "lora_2"], adapter_weights=[1 - alpha, alpha])
-                
-                # Prepare model input
-                img = image_transforms(Image.open(file)).unsqueeze(0).to(args_device)
-                model_input = pipe.vae.encode(img).latent_dist.sample()
-                model_input = model_input * pipe.vae.config.scaling_factor
+            # Sample a random timestep for each image
+            timesteps = torch.randint(
+                0,
+                pipe.scheduler.config.num_train_timesteps,
+                (bsz,),
+                device=model_input.device,
+            )
+            timesteps = timesteps.long()
 
-                # Sample noise that we'll add to the latents
-                noise = torch.randn_like(model_input)
-                bsz, channels, _, _ = model_input.shape
+            # Add noise to the model input according to the noise magnitude at each timestep
+            # (this is the forward diffusion process)
+            noisy_model_input = pipe.scheduler.add_noise(model_input, noise, timesteps)
 
-                # Sample a random timestep for each image
-                timesteps = torch.randint(
-                    0,
-                    pipe.scheduler.config.num_train_timesteps,
-                    (bsz,),
-                    device=model_input.device,
+            # Get the text embedding for conditioning
+            prompt_embeds, _ = pipe.encode_prompt(
+                args_instance_prompt,
+                device=args_device,
+                num_images_per_prompt=bsz,
+                do_classifier_free_guidance=False,
+                lora_scale=chosen_alpha,
+            )
+
+            # Predict the noise residual
+            if pipe.unet.config.in_channels == channels * 2:
+                noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
+            model_pred = pipe.unet(
+                noisy_model_input,
+                timesteps,
+                prompt_embeds,
+                cross_attention_kwargs = {'scale': chosen_alpha},
+                return_dict=False,
+            )[0]
+
+            # if model predicts variance, throw away the prediction. we will only train on the
+            # simplified training objective. This means that all schedulers using the fine tuned
+            # model must be configured to use one of the fixed variance variance types.
+            if model_pred.shape[1] == 6:
+                model_pred, _ = torch.chunk(model_pred, 2, dim=1)
+
+            # Get the target for loss depending on the prediction type
+            if pipe.scheduler.config.prediction_type == "epsilon":
+                target = noise
+            elif pipe.scheduler.config.prediction_type == "v_prediction":
+                target = pipe.scheduler.get_velocity(model_input, noise, timesteps)
+            else:
+                raise ValueError(
+                    f"Unknown prediction type {pipe.scheduler.config.prediction_type}"
                 )
-                timesteps = timesteps.long()
 
-                # Add noise to the model input according to the noise magnitude at each timestep
-                # (this is the forward diffusion process)
-                noisy_model_input = pipe.scheduler.add_noise(model_input, noise, timesteps)
+            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                # Get the text embedding for conditioning
-                prompt_ids = pipe.tokenizer(
-                    args_instance_prompt,
-                    return_tensors="pt",
-                    padding="max_length",
-                    truncation=True,
-                    max_length=pipe.tokenizer.model_max_length,
-                ).input_ids.to(args_device)       
-                prompt_embeds = pipe.text_encoder(prompt_ids)[0]
-
-                # Predict the noise residual
-                if pipe.unet.config.in_channels == channels * 2:
-                    noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
-                model_pred = pipe.unet(
-                    noisy_model_input,
-                    timesteps,
-                    prompt_embeds,
-                    return_dict=False,
-                )[0]
-
-                # if model predicts variance, throw away the prediction. we will only train on the
-                # simplified training objective. This means that all schedulers using the fine tuned
-                # model must be configured to use one of the fixed variance variance types.
-                if model_pred.shape[1] == 6:
-                    model_pred, _ = torch.chunk(model_pred, 2, dim=1)
-
-                # Get the target for loss depending on the prediction type
-                if pipe.scheduler.config.prediction_type == "epsilon":
-                    target = noise
-                elif pipe.scheduler.config.prediction_type == "v_prediction":
-                    target = pipe.scheduler.get_velocity(model_input, noise, timesteps)
-                else:
-                    raise ValueError(
-                        f"Unknown prediction type {pipe.scheduler.config.prediction_type}"
-                    )
-
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-
-                # backward pass
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()    
+            # backward pass
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()    
