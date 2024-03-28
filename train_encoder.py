@@ -11,48 +11,11 @@ from torch.utils import data
 
 from datasets.nsd import NaturalScenesDataset
 from datasets.nsd_features import NSDFeaturesDataset
-from models.brain_encoder import EncoderModule
+from methods.brain_encoder import EncoderModule
 from utils.callbacks import WandbR2Callback, WandbTSNECallback
-from utils.configs import config_from_args
+from utils.configs import config_from_args, ConfigEncoder
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-
-    # Model and Data Parameters
-    parser.add_argument("--subject", type=int, default=1)
-    parser.add_argument("--roi", default="floc-faces")
-    parser.add_argument("--hemisphere", type=str, default="right")
-    parser.add_argument("--feature-extractor-type", type=str, default="clip_1_5")
-    parser.add_argument("--n-neighbors", type=int, default=0)
-    parser.add_argument("--distance-metric", type=str, default="cosine")
-    parser.add_argument("--predict-average", action=BooleanOptionalAction, default=True)
-
-    # Training Parameters
-    parser.add_argument("--data-dir", type=str, default="./data/")
-    parser.add_argument("--ckpt-dir", type=str, default="./checkpoints/")
-    parser.add_argument("--logs-dir", type=str, default="./logs/")
-    parser.add_argument("--exp-name", type=str, default=None)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--num-workers", type=int, default=18)
-    parser.add_argument("--max-epochs", type=int, default=50)
-    parser.add_argument(
-        "--device",
-        type=str,
-        default=(
-            torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
-        ),
-    )
-
-    # WandB Parameters
-    parser.add_argument("--wandb-project", type=str, default="masters-thesis")
-    parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
-    parser.add_argument("--wandb-mode", type=str, default="online")
-
-    # Parse arguments
-    args = parser.parse_args()
-    cfg = config_from_args(args, mode="encoder")
+def main(cfg: ConfigEncoder):
     pl.seed_everything(cfg.seed, workers=True)
 
     if cfg.exp_name is None:
@@ -144,3 +107,43 @@ if __name__ == "__main__":
 
     # Train model
     trainer.fit(model, train_loader, val_loader)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    # Model and Data Parameters
+    parser.add_argument("--subject", type=int, default=1)
+    parser.add_argument("--roi", default="floc-faces")
+    parser.add_argument("--hemisphere", type=str, default="right")
+    parser.add_argument("--feature-extractor-type", type=str, default="clip_1_5")
+    parser.add_argument("--n-neighbors", type=int, default=0)
+    parser.add_argument("--distance-metric", type=str, default="cosine")
+    parser.add_argument("--predict-average", action=BooleanOptionalAction, default=True)
+
+    # Training Parameters
+    parser.add_argument("--data-dir", type=str, default="./data/")
+    parser.add_argument("--ckpt-dir", type=str, default="./checkpoints/")
+    parser.add_argument("--logs-dir", type=str, default="./logs/")
+    parser.add_argument("--exp-name", type=str, default=None)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--num-workers", type=int, default=18)
+    parser.add_argument("--max-epochs", type=int, default=50)
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=(
+            torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+        ),
+    )
+
+    # WandB Parameters
+    parser.add_argument("--wandb-project", type=str, default="masters-thesis")
+    parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
+    parser.add_argument("--wandb-mode", type=str, default="online")
+
+    # Parse arguments
+    args = parser.parse_args()
+    cfg = config_from_args(args, mode="encoder")
+    main(cfg)

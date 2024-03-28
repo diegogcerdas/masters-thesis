@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 
-class DreamBoothDataset(Dataset):
+class LoRADataset(Dataset):
     def __init__(
         self,
         instance_data_root: str,
@@ -27,5 +27,5 @@ class DreamBoothDataset(Dataset):
         return self.num_instance_images
 
     def __getitem__(self, index):
-        img = Image.open(self.instance_images_path[index % self.num_instance_images])
+        img = Image.open(self.instance_images_path[index % self.num_instance_images]).convert('RGB')
         return self.image_transforms(img)

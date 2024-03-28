@@ -31,7 +31,7 @@ class ConfigSynthesis:
     pretrained_model_name_or_path: str
     prompt: str
     num_images: int
-    inference_steps: int
+    num_timesteps: int
     outputs_dir: str
     lora_dir: str
     seed: int
@@ -40,32 +40,21 @@ class ConfigSynthesis:
 
 @dataclass
 class ConfigLora:
-    data_dir: str
-    subject: int
-    hemisphere: str
-    outputs_dir: str
-    roi: str
-    center_voxel: int
-    n_neighbor_voxels: int
-    voxels_filename: str
-    feature_extractor_type: str
-    distance_metric: str
-    n_neighbors: int
-    pos_std_threshold: float
-    num_stimuli: int
     pretrained_model_name_or_path: str
+    data_dir: str
     instance_prompt: str
+    num_timesteps: int
+    lora_rank: int
+    no_train_unet: bool
+    no_train_text_encoder: bool
     validation_prompt: str
-    max_train_epochs: int
-    num_validation_images: int
     validation_epochs: int
-    train_text_encoder: bool
-    inference_steps: int
+    num_val_images: int
+    save_folder: str
     resolution: int
-    rank: int
+    num_epochs: int
     batch_size: int
     learning_rate: float
-    max_grad_norm: float
     num_workers: int
     seed: int
     device: str

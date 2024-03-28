@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torcheval.metrics.functional import r2_score
-from models.feature_extractor import create_feature_extractor
+from methods.feature_extractor import create_feature_extractor
 
 
 class EncoderModule(pl.LightningModule):

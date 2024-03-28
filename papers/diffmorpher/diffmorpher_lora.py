@@ -4,7 +4,7 @@ import pytorch_lightning as pl
 import torch
 import torch.utils.data as data
 
-from datasets.dreambooth import DreamBoothDataset
+from datasets.lora_dataset import DreamBoothDataset
 from models.lora_dreambooth import LoRADreamBooth
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"

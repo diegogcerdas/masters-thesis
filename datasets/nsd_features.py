@@ -9,7 +9,7 @@ from torch.utils import data
 from tqdm import tqdm
 
 from datasets.nsd import NaturalScenesDataset
-from models.feature_extractor import create_feature_extractor
+from methods.feature_extractor import create_feature_extractor
 
 from torchvision import transforms
 
