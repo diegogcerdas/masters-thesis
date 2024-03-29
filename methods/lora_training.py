@@ -185,11 +185,6 @@ def train_lora(
             )
 
             # Predict the noise residual
-            if pipe.unet.config.in_channels == channels * 2:
-                noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
-                print('Keep 1')
-            else:
-                print('Delete 1')
             model_pred = pipe.unet(
                 noisy_model_input,
                 timesteps,
@@ -197,22 +192,11 @@ def train_lora(
                 return_dict=False,
             )[0]
 
-            # if model predicts variance, throw away the prediction. we will only train on the
-            # simplified training objective. This means that all schedulers using the fine tuned
-            # model must be configured to use one of the fixed variance variance types.
-            if model_pred.shape[1] == 6:
-                model_pred, _ = torch.chunk(model_pred, 2, dim=1)
-                print('Keep 2')
-            else:
-                print('Delete 2')
-
             # Get the target for loss depending on the prediction type
             if pipe.scheduler.config.prediction_type == "epsilon":
                 target = noise
-                print('epsilon')
             elif pipe.scheduler.config.prediction_type == "v_prediction":
                 target = pipe.scheduler.get_velocity(model_input, noise, timesteps)
-                print('v_prediction')
             else:
                 raise ValueError(
                     f"Unknown prediction type {pipe.scheduler.config.prediction_type}"

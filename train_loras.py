@@ -48,7 +48,7 @@ if __name__ == "__main__":
     parser.add_argument("--save-folder", type=str, default="./outputs/1_PPA_right/food_not_person_animal/lora")
     parser.add_argument("--resolution", type=int, default=768)
     parser.add_argument("--num-epochs", type=int, default=50)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--learning-rate", type=float, default=1e-5)
     parser.add_argument("--num-workers", type=int, default=18)
     parser.add_argument("--seed", type=int, default=0)
