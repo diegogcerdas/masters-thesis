@@ -51,9 +51,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--pretrained-model-name-or-path", type=str, default="stabilityai/stable-diffusion-2",)
-    parser.add_argument("--prompt", type=str, default="an picture of a cat with background")
+    parser.add_argument("--prompt", type=str, default="a photo of food with background")
     parser.add_argument("--num-images", type=int, default=10)
-    parser.add_argument("--num-timesteps", type=int, default=100)
+    parser.add_argument("--num-timesteps", type=int, default=50)
     parser.add_argument("--outputs-dir", type=str, default="./outputs/synthesis/")
     parser.add_argument("--lora-dir", type=str, default=None)
     parser.add_argument("--seed", type=int, default=0)

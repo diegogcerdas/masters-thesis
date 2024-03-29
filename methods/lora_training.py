@@ -162,7 +162,7 @@ def train_lora(
 
             # Sample noise that we'll add to the latents
             noise = torch.randn_like(model_input)
-            bsz, channels, _, _ = model_input.shape
+            bsz, _, _, _ = model_input.shape
 
             # Sample a random timestep for each image
             timesteps = torch.randint(
