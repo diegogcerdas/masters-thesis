@@ -10,11 +10,9 @@ class LoRADataset(Dataset):
         self,
         instance_data_root: str,
         resolution: int,
-        device: str,
     ):
         self.instance_images_path = list(Path(instance_data_root).iterdir())
         self.num_instance_images = len(self.instance_images_path)
-        self.my_device = device
         self.image_transforms = transforms.Compose(
             [
                 transforms.Resize(
@@ -30,4 +28,4 @@ class LoRADataset(Dataset):
 
     def __getitem__(self, index):
         img = Image.open(self.instance_images_path[index % self.num_instance_images]).convert('RGB')
-        return self.image_transforms(img).to(self.my_device)
+        return self.image_transforms(img)

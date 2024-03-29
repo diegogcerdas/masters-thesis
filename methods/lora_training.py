@@ -86,7 +86,7 @@ def train_lora(
     optimizer = torch.optim.AdamW(params_to_optimize, lr=learning_rate)
 
     # Prepare dataset
-    dataset = LoRADataset(data_dir, resolution, device)
+    dataset = LoRADataset(data_dir, resolution)
     dataloader = data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -155,6 +155,7 @@ def train_lora(
         for batch in dataloader:
             
             # Prepare model input
+            batch = batch.to(device)
             model_input = pipe.vae.encode(batch).latent_dist.sample()
             model_input = model_input * pipe.vae.config.scaling_factor
 
