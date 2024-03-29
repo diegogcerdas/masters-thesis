@@ -45,8 +45,8 @@ class ConfigLora:
     instance_prompt: str
     num_timesteps: int
     lora_rank: int
-    no_train_unet: bool
-    no_train_text_encoder: bool
+    omit_unet: bool
+    omit_text_encoder: bool
     validation_prompt: str
     validation_epochs: int
     num_val_images: int

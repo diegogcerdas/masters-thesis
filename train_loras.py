@@ -17,8 +17,8 @@ def main(cfg: ConfigLora):
             instance_prompt=cfg.instance_prompt,
             num_timesteps=cfg.num_timesteps,
             lora_rank=cfg.lora_rank,
-            train_unet=not cfg.no_train_unet,
-            train_text_encoder=not cfg.no_train_text_encoder,
+            omit_unet=cfg.omit_unet,
+            omit_text_encoder=cfg.omit_text_encoder,
             validation_prompt=cfg.validation_prompt,
             validation_epochs=cfg.validation_epochs,
             num_val_images=cfg.num_val_images,
@@ -40,8 +40,8 @@ if __name__ == "__main__":
     parser.add_argument("--instance-prompt", type=str, default="a photo of food with background")
     parser.add_argument("--num-timesteps", type=int, default=50)
     parser.add_argument("--lora-rank", type=int, default=8)
-    parser.add_argument("--no-train-unet", action=BooleanOptionalAction, default=False)
-    parser.add_argument("--no-train-text-encoder", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--omit-unet", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--omit-text-encoder", action=BooleanOptionalAction, default=False)
     parser.add_argument("--validation-prompt", type=str, default="a photo of food with background")
     parser.add_argument("--validation-epochs", type=int, default=10)
     parser.add_argument("--num-val-images", type=int, default=15)

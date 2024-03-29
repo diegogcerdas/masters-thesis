@@ -18,8 +18,8 @@ def train_lora(
     instance_prompt: str,
     num_timesteps: int,
     lora_rank: int,
-    train_unet: bool,
-    train_text_encoder: bool,
+    omit_unet: bool,
+    omit_text_encoder: bool,
     validation_prompt: str,
     validation_epochs: int,
     num_val_images: int,
@@ -32,7 +32,7 @@ def train_lora(
     seed: int,
     device: str,
 ):
-    assert train_unet or train_text_encoder, "At least one of the models must be trainable."
+    assert not (omit_unet and omit_text_encoder), "At least one of the models must be trainable."
     seed_everything(seed)
     
     # Load the pretrained model
@@ -52,7 +52,7 @@ def train_lora(
     pipe.scheduler.set_timesteps(num_timesteps)
 
     # Add new LoRA weights to UNet
-    if train_unet:
+    if not omit_unet:
         unet_lora_config = LoraConfig(
             r=lora_rank,
             lora_alpha=lora_rank,
@@ -69,7 +69,7 @@ def train_lora(
         pipe.unet.add_adapter(unet_lora_config)
 
     # Add new LoRA weights to text encoder
-    if train_text_encoder:
+    if not omit_text_encoder:
         text_lora_config = LoraConfig(
             r=lora_rank,
             lora_alpha=lora_rank,
@@ -79,9 +79,10 @@ def train_lora(
         pipe.text_encoder.add_adapter(text_lora_config)
 
     # Initialize the optimizer
-    if train_unet:
-        params_to_optimize = list(filter(lambda p: p.requires_grad, pipe.unet.parameters()))
-    if train_text_encoder:
+    params_to_optimize = []
+    if not omit_unet:
+        params_to_optimize = params_to_optimize + list(filter(lambda p: p.requires_grad, pipe.unet.parameters()))
+    if not omit_text_encoder:
         params_to_optimize = params_to_optimize + list(filter(lambda p: p.requires_grad, pipe.text_encoder.parameters()))
     optimizer = torch.optim.AdamW(params_to_optimize, lr=learning_rate)
 
@@ -100,9 +101,9 @@ def train_lora(
 
         if epoch % validation_epochs == 0:
             
-            if train_unet:
+            if not omit_unet:
                 pipe.unet.eval()
-            if train_text_encoder:
+            if not omit_text_encoder:
                 pipe.text_encoder.eval()
 
             pipe.set_progress_bar_config(disable=True)
@@ -125,14 +126,14 @@ def train_lora(
             save_images(images, save_folder_epoch)
 
             # Save LoRA weights
-            if train_unet:
+            if not omit_unet:
                 unet_lora_state_dict = convert_state_dict_to_diffusers(
                     get_peft_model_state_dict(pipe.unet)
                 )
             else:
                 unet_lora_state_dict = None
 
-            if train_text_encoder:
+            if not omit_text_encoder:
                 text_encoder_state_dict = convert_state_dict_to_diffusers(
                     get_peft_model_state_dict(pipe.text_encoder)
                 )
@@ -147,9 +148,9 @@ def train_lora(
 
         #################### TRAINING ####################
 
-        if train_unet:
+        if not omit_unet:
             pipe.unet.train()
-        if train_text_encoder:
+        if not omit_text_encoder:
             pipe.text_encoder.train()
 
         for batch in dataloader:
