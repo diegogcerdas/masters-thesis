@@ -86,7 +86,7 @@ def train_lora(
     optimizer = torch.optim.AdamW(params_to_optimize, lr=learning_rate)
 
     # Prepare dataset
-    dataset = LoRADataset(data_dir, resolution)
+    dataset = LoRADataset(data_dir, resolution, device)
     dataloader = data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -105,6 +105,8 @@ def train_lora(
             if train_text_encoder:
                 pipe.text_encoder.eval()
 
+            pipe.set_progress_bar_config(disable=True)
+
             # Run the pipeline
             pipeline_args = {
                 "prompt": validation_prompt,
@@ -112,7 +114,7 @@ def train_lora(
             }
             images = []
             generator = torch.Generator(device=device).manual_seed(seed)
-            for _ in range(num_val_images):
+            for _ in tqdm(range(num_val_images), desc="Generating images"):
                 with torch.cuda.amp.autocast():
                     image = pipe(**pipeline_args, generator=generator).images[0]
                     images.append(image)
