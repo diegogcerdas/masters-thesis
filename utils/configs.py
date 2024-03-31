@@ -59,6 +59,7 @@ class ConfigLora:
     seed: int
     device: str
     with_prior_preservation_loss: bool
+    prior_preservation_loss_weight: float
     num_class_images: int
     class_data_dir: str
     class_prompt: str

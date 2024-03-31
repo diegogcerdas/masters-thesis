@@ -33,6 +33,7 @@ def train_lora(
     seed: int,
     device: str,
     with_prior_preservation_loss: bool = False,
+    prior_preservation_loss_weight: float = 0.25,
     num_class_images: int = 200,
     class_data_dir: str = None,
     class_prompt: str = None,
@@ -67,7 +68,6 @@ def train_lora(
 
         if cur_class_images < num_class_images:
 
-            pipe = pipe.eval()
             num_new_images = num_class_images - cur_class_images
             pipeline_args = {
                 "prompt": class_prompt,
@@ -80,9 +80,9 @@ def train_lora(
                     image = pipe(**pipeline_args, generator=generator).images[0]
                     images.append(image)
 
-        names = [f'{str(uuid.uuid4())}.png' for _ in images]
-        save_images(images, class_data_dir, names)
-        del images
+            names = [f'{str(uuid.uuid4())}.png' for _ in images]
+            save_images(images, class_data_dir, names)
+            del images
 
     # Add new LoRA weights to UNet
     if not omit_unet:
@@ -186,9 +186,9 @@ def train_lora(
         for batch in dataloader:
             
             # Prepare model input
-            batch = batch.to(device)
             if with_prior_preservation_loss:
                 batch = torch.cat([batch[0], batch[1]], dim=0)
+            batch = batch.to(device)
             model_input = pipe.vae.encode(batch).latent_dist.sample()
             model_input = model_input * pipe.vae.config.scaling_factor
 
@@ -247,7 +247,7 @@ def train_lora(
                 prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
                 # Add the prior loss to the instance loss.
-                loss = loss + prior_loss
+                loss = loss + prior_preservation_loss_weight * prior_loss
             else:
                 loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 

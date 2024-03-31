@@ -22,7 +22,7 @@ def main(cfg: ConfigSynthesis):
 
     # switch to DDIM scheduler
     pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
-    pipeline.scheduler.set_timesteps(cfg.inference_steps)
+    pipeline.scheduler.set_timesteps(cfg.num_timesteps)
 
     # optionally load LoRA weights
     if cfg.lora_dir is not None:
@@ -31,10 +31,10 @@ def main(cfg: ConfigSynthesis):
     # run the pipeline
     pipeline_args = {
         "prompt": cfg.prompt,
-        "num_inference_steps": cfg.inference_steps,
+        "num_inference_steps": cfg.num_timesteps,
     }
     images = []
-    generator = torch.Generator(device=cfg.device).manual_seed(cfg.device)
+    generator = torch.Generator(device=cfg.device).manual_seed(cfg.seed)
     for _ in range(cfg.num_images):
         with torch.cuda.amp.autocast():
             image = pipeline(**pipeline_args, generator=generator).images[0]
