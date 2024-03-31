@@ -58,6 +58,10 @@ class ConfigLora:
     num_workers: int
     seed: int
     device: str
+    with_prior_preservation_loss: bool
+    num_class_images: int
+    class_data_dir: str
+    class_prompt: str
 
 
 def config_from_args(args: dict, mode: str = "train"):

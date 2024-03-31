@@ -10,6 +10,7 @@ from diffusers.utils import convert_state_dict_to_diffusers
 from peft.utils import get_peft_model_state_dict
 from datasets.lora_dataset import LoRADataset
 import torch.utils.data as data
+import uuid
 
 
 def train_lora(
@@ -31,13 +32,20 @@ def train_lora(
     num_workers: int,
     seed: int,
     device: str,
+    with_prior_preservation_loss: bool = False,
+    num_class_images: int = 200,
+    class_data_dir: str = None,
+    class_prompt: str = None,
 ):
     assert not (omit_unet and omit_text_encoder), "At least one of the models must be trainable."
+    assert not with_prior_preservation_loss or (class_data_dir is not None and class_prompt is not None and num_class_images > 0)
+    assert (not with_prior_preservation_loss and class_data_dir is None) or with_prior_preservation_loss
     seed_everything(seed)
     
     # Load the pretrained model
     pipe = StableDiffusionPipeline.from_pretrained(pretrained_model_name_or_path)
     pipe = pipe.to(device)
+    pipe.set_progress_bar_config(disable=True)
 
     # Freeze parameters of models to save more memory
     pipe.vae.requires_grad_(False)
@@ -50,6 +58,31 @@ def train_lora(
     # Switch to DDIM scheduler
     pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
     pipe.scheduler.set_timesteps(num_timesteps)
+
+    # Generate class images if prior preservation is enabled.
+    if with_prior_preservation_loss:
+        
+        os.makedirs(class_data_dir, exist_ok=True)
+        cur_class_images = len([f for f in os.listdir(class_data_dir) if f.endswith(".png")])
+
+        if cur_class_images < num_class_images:
+
+            pipe = pipe.eval()
+            num_new_images = num_class_images - cur_class_images
+            pipeline_args = {
+                "prompt": class_prompt,
+                "num_inference_steps": num_timesteps,
+            }
+            images = []
+            generator = torch.Generator(device=device).manual_seed(seed)
+            for _ in tqdm(range(num_new_images), desc="Generating images"):
+                with torch.cuda.amp.autocast():
+                    image = pipe(**pipeline_args, generator=generator).images[0]
+                    images.append(image)
+
+        names = [f'{str(uuid.uuid4())}.png' for _ in images]
+        save_images(images, class_data_dir, names)
+        del images
 
     # Add new LoRA weights to UNet
     if not omit_unet:
@@ -87,7 +120,7 @@ def train_lora(
     optimizer = torch.optim.AdamW(params_to_optimize, lr=learning_rate)
 
     # Prepare dataset
-    dataset = LoRADataset(data_dir, resolution)
+    dataset = LoRADataset(data_dir, resolution, class_data_dir)
     dataloader = data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -106,8 +139,6 @@ def train_lora(
             if not omit_text_encoder:
                 pipe.text_encoder.eval()
 
-            pipe.set_progress_bar_config(disable=True)
-
             # Run the pipeline
             pipeline_args = {
                 "prompt": validation_prompt,
@@ -122,7 +153,6 @@ def train_lora(
 
             # Save the images
             save_folder_epoch = os.path.join(save_folder, f'Epoch {epoch}')
-            os.makedirs(save_folder_epoch, exist_ok=True)
             save_images(images, save_folder_epoch)
 
             # Save LoRA weights
@@ -157,6 +187,8 @@ def train_lora(
             
             # Prepare model input
             batch = batch.to(device)
+            if with_prior_preservation_loss:
+                batch = torch.cat([batch[0], batch[1]], dim=0)
             model_input = pipe.vae.encode(batch).latent_dist.sample()
             model_input = model_input * pipe.vae.config.scaling_factor
 
@@ -203,7 +235,21 @@ def train_lora(
                     f"Unknown prediction type {pipe.scheduler.config.prediction_type}"
                 )
 
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+            if with_prior_preservation_loss:
+                # Chunk the noise and model_pred into two parts and compute the loss on each part separately.
+                model_pred, model_pred_prior = torch.chunk(model_pred, 2, dim=0)
+                target, target_prior = torch.chunk(target, 2, dim=0)
+
+                # Compute instance loss
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+
+                # Compute prior loss
+                prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
+
+                # Add the prior loss to the instance loss.
+                loss = loss + prior_loss
+            else:
+                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
             # backward pass
             loss.backward()

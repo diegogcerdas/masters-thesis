@@ -30,6 +30,10 @@ def main(cfg: ConfigLora):
             num_workers=cfg.num_workers,
             seed=cfg.seed,
             device=cfg.device,
+            with_prior_preservation_loss=cfg.with_prior_preservation_loss,
+            num_class_images=cfg.num_class_images,
+            class_data_dir=cfg.class_data_dir,
+            class_prompt=cfg.class_prompt,
         )
 
 if __name__ == "__main__":
@@ -37,15 +41,19 @@ if __name__ == "__main__":
 
     parser.add_argument("--pretrained-model-name-or-path", type=str, default="stabilityai/stable-diffusion-2")
     parser.add_argument("--data-dir", type=str, default="./outputs/1_PPA_right/food_not_person_animal")
-    parser.add_argument("--instance-prompt", type=str, default="a photo of food with background")
+    parser.add_argument("--instance-prompt", type=str, default="a photo of [V1] food with [V2] background")
     parser.add_argument("--num-timesteps", type=int, default=50)
     parser.add_argument("--lora-rank", type=int, default=8)
     parser.add_argument("--omit-unet", action=BooleanOptionalAction, default=False)
     parser.add_argument("--omit-text-encoder", action=BooleanOptionalAction, default=False)
-    parser.add_argument("--validation-prompt", type=str, default="a photo of food with background")
+    parser.add_argument("--validation-prompt", type=str, default="a photo of [V1] food with [V2] background")
     parser.add_argument("--validation-epochs", type=int, default=10)
     parser.add_argument("--num-val-images", type=int, default=15)
     parser.add_argument("--save-folder", type=str, default="./outputs/1_PPA_right/food_not_person_animal/lora")
+    parser.add_argument("--with-prior-preservation-loss", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--num-class-images", type=int, default=200)
+    parser.add_argument("--class-data-dir", type=str, default="./outputs/1_PPA_right/food_not_person_animal/lora/class")
+    parser.add_argument("--class-prompt", type=str, default="a photo of food with background")
     parser.add_argument("--resolution", type=int, default=768)
     parser.add_argument("--num-epochs", type=int, default=50)
     parser.add_argument("--batch-size", type=int, default=4)
