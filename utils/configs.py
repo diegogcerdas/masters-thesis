@@ -65,6 +65,19 @@ class ConfigLora:
     class_prompt: str
 
 
+@dataclass
+class ConfigInterpolation:
+    pretrained_model_name_or_path: str
+    lora_min_path: str
+    lora_max_path: str
+    prompt: str
+    num_timesteps: int
+    num_frames: int
+    outputs_dir: str
+    seed: int
+    device: str
+
+
 def config_from_args(args: dict, mode: str = "train"):
     if mode == "synthesis":
         class_name = ConfigSynthesis
@@ -72,6 +85,8 @@ def config_from_args(args: dict, mode: str = "train"):
         class_name = ConfigLora
     elif mode == "encoder":
         class_name = ConfigEncoder
+    elif mode == "interpolation":
+        class_name = ConfigInterpolation
     else:
         raise ValueError("Mode not recognized.")
     return class_name(

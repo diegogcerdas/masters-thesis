@@ -2,10 +2,10 @@ import argparse
 import torch
 from utils.configs import config_from_args
 from utils.img_utils import save_images
-from utils.configs import ConfigSynthesis
+from utils.configs import ConfigInterpolation
 from methods.lora_interpolate import interpolate
 
-def main(cfg: ConfigSynthesis):
+def main(cfg: ConfigInterpolation):
 
     images, alpha_list = interpolate(
         pretrained_model_name_or_path=cfg.pretrained_model_name_or_path,
@@ -43,5 +43,5 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-    cfg = config_from_args(args, mode="synthesis")
+    cfg = config_from_args(args, mode="interpolation")
     main(cfg)

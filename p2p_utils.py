@@ -268,7 +268,7 @@ def text2image_ldm_stable(
     low_resource: bool = False,
 ):
     register_attention_control(model, controller)
-    height = width = 512
+    height = width = 768
     batch_size = len(prompt)
 
     text_input = model.tokenizer(
@@ -284,20 +284,20 @@ def text2image_ldm_stable(
         [""] * batch_size, padding="max_length", max_length=max_length, return_tensors="pt"
     )
     uncond_embeddings = model.text_encoder(uncond_input.input_ids.to(model.device))[0]
-    
+
     context = [uncond_embeddings, text_embeddings]
     if not low_resource:
         context = torch.cat(context)
     latent, latents = init_latent(latent, model, height, width, generator, batch_size)
-    
+
     # set timesteps
     extra_set_kwargs = {}
     model.scheduler.set_timesteps(num_inference_steps, **extra_set_kwargs)
     for t in tqdm(model.scheduler.timesteps):
         latents = diffusion_step(model, controller, latents, context, t, guidance_scale, low_resource)
-    
+
     image = latent2image(model.vae, latents)
-  
+
     return image, latent
 
 def init_latent(latent, model, height, width, generator, batch_size):
@@ -337,10 +337,10 @@ def register_attention_control(model, controller):
             to_out = self.to_out[0]
         else:
             to_out = self.to_out
-        
+
         def forward(hidden_states, encoder_hidden_states=None, attention_mask=None,temb=None,):
             is_cross = encoder_hidden_states is not None
-            
+
             residual = hidden_states
 
             if self.spatial_norm is not None:
@@ -431,9 +431,11 @@ def register_attention_control(model, controller):
 ######################################################################################################
 
 MAX_NUM_WORDS = 77
-LOW_RESOURCE = True 
+LOW_RESOURCE = True
 NUM_DIFFUSION_STEPS = 50
 GUIDANCE_SCALE = 7.5
+NUM_DDIM_STEPS = 50
+
 
 class LocalBlend:
 
@@ -461,20 +463,20 @@ class LocalBlend:
         mask = (mask[:1] + mask[1:]).float()
         x_t = x_t[:1] + mask * (x_t - x_t[:1])
         return x_t
-       
+
 
 class AttentionControl(abc.ABC):
-    
+
     def step_callback(self, x_t):
         return x_t
-    
+
     def between_steps(self):
         return
-    
+
     @property
     def num_uncond_att_layers(self):
         return self.num_att_layers if LOW_RESOURCE else 0
-    
+
     @abc.abstractmethod
     def forward (self, attn, is_cross: bool, place_in_unet: str):
         raise NotImplementedError
@@ -492,7 +494,7 @@ class AttentionControl(abc.ABC):
             self.cur_step += 1
             self.between_steps()
         return attn
-    
+
     def reset(self):
         self.cur_step = 0
         self.cur_att_layer = 0
@@ -502,12 +504,6 @@ class AttentionControl(abc.ABC):
         self.num_att_layers = -1
         self.cur_att_layer = 0
 
-class EmptyControl(AttentionControl):
-    
-    def forward (self, attn, is_cross: bool, place_in_unet: str):
-        return attn
-    
-    
 class AttentionStore(AttentionControl):
 
     @staticmethod
@@ -545,24 +541,24 @@ class AttentionStore(AttentionControl):
         self.step_store = self.get_empty_store()
         self.attention_store = {}
 
-        
+
 class AttentionControlEdit(AttentionStore, abc.ABC):
-    
+
     def step_callback(self, x_t):
         if self.local_blend is not None:
             x_t = self.local_blend(x_t, self.attention_store)
         return x_t
-        
+
     def replace_self_attention(self, attn_base, att_replace):
         if att_replace.shape[2] <= 16 ** 2:
             return attn_base.unsqueeze(0).expand(att_replace.shape[0], *attn_base.shape)
         else:
             return att_replace
-    
+
     @abc.abstractmethod
     def replace_cross_attention(self, attn_base, att_replace):
         raise NotImplementedError
-    
+
     def forward(self, attn, is_cross: bool, place_in_unet: str):
         super(AttentionControlEdit, self).forward(attn, is_cross, place_in_unet)
         if is_cross or (self.num_self_replace[0] <= self.cur_step < self.num_self_replace[1]):
@@ -577,7 +573,7 @@ class AttentionControlEdit(AttentionStore, abc.ABC):
                 attn[1:] = self.replace_self_attention(attn_base, attn_repalce)
             attn = attn.reshape(self.batch_size * h, *attn.shape[2:])
         return attn
-    
+
     def __init__(self, tokenizer, prompts, num_steps: int,
                  cross_replace_steps: Union[float, Tuple[float, float], Dict[str, Tuple[float, float]]],
                  self_replace_steps: Union[float, Tuple[float, float]],
@@ -594,12 +590,12 @@ class AttentionReplace(AttentionControlEdit):
 
     def replace_cross_attention(self, attn_base, att_replace):
         return torch.einsum('hpw,bwn->bhpn', attn_base, self.mapper)
-      
+
     def __init__(self, tokenizer, prompts, num_steps: int, cross_replace_steps: float, self_replace_steps: float, device,
                  local_blend: Optional[LocalBlend] = None):
         super(AttentionReplace, self).__init__(tokenizer, prompts, num_steps, cross_replace_steps, self_replace_steps, local_blend, device)
         self.mapper = get_replacement_mapper(prompts, tokenizer).to(device)
-        
+
 
 class AttentionRefine(AttentionControlEdit):
 
@@ -630,7 +626,6 @@ class AttentionReweight(AttentionControlEdit):
         self.equalizer = equalizer.to(device)
         self.prev_controller = controller
 
-
 def get_equalizer(tokenizer, text: str, word_select: Union[int, Tuple[int, ...]], values: Union[List[float],
                   Tuple[float, ...]]):
     if type(word_select) is int or type(word_select) is str:
@@ -655,7 +650,6 @@ def aggregate_attention(prompts, attention_store: AttentionStore, res: int, from
     out = out.sum(0) / out.shape[0]
     return out.cpu()
 
-
 def show_cross_attention(tokenizer, prompts, attention_store: AttentionStore, res: int, from_where: List[str], select: int = 0):
     tokens = tokenizer.encode(prompts[select])
     decoder = tokenizer.decode
@@ -670,28 +664,36 @@ def show_cross_attention(tokenizer, prompts, attention_store: AttentionStore, re
         image = text_under_image(image, decoder(int(tokens[i])))
         images.append(image)
     view_images(np.stack(images, axis=0))
-    
 
-def show_self_attention_comp(prompts, attention_store: AttentionStore, res: int, from_where: List[str],
-                        max_com=10, select: int = 0):
-    attention_maps = aggregate_attention(prompts, attention_store, res, from_where, False, select).numpy().reshape((res ** 2, res ** 2))
-    u, s, vh = np.linalg.svd(attention_maps - np.mean(attention_maps, axis=1, keepdims=True))
-    images = []
-    for i in range(max_com):
-        image = vh[i].reshape(res, res)
-        image = image - image.min()
-        image = 255 * image / image.max()
-        image = np.repeat(np.expand_dims(image, axis=2), 3, axis=2).astype(np.uint8)
-        image = Image.fromarray(image).resize((256, 256))
-        image = np.array(image)
-        images.append(image)
-    view_images(np.concatenate(images, axis=1))
-
-def run_and_display(ldm_stable, prompts, controller, latent=None, run_baseline=False, generator=None):
-    if run_baseline:
-        print("w.o. prompt-to-prompt")
-        images, latent = run_and_display(ldm_stable, prompts, EmptyControl(), latent=latent, run_baseline=False, generator=generator)
-        print("with prompt-to-prompt")
-    images, x_t = text2image_ldm_stable(ldm_stable, prompts, controller, latent=latent, num_inference_steps=NUM_DIFFUSION_STEPS, guidance_scale=GUIDANCE_SCALE, generator=generator, low_resource=LOW_RESOURCE)
+def run_and_display(ldm_stable, prompts, controller, latent=None, generator=None):
+    images, x_t = text2image_ldm_stable(
+        ldm_stable, 
+        prompts, 
+        controller, 
+        latent=latent, 
+        num_inference_steps=NUM_DIFFUSION_STEPS, 
+        guidance_scale=GUIDANCE_SCALE, 
+        generator=generator, 
+        low_resource=LOW_RESOURCE
+    )
     view_images(images)
     return images, x_t
+
+def make_controller(
+    prompts: List[str], 
+    is_replace_controller: bool, 
+    cross_replace_steps: Dict[str, float], 
+    self_replace_steps: float, 
+    blend_words=None, 
+    equilizer_params=None
+) -> AttentionControlEdit:
+    lb = LocalBlend(prompts, blend_words) if blend_words is not None else None
+    if is_replace_controller:
+        controller = AttentionReplace(prompts, NUM_DDIM_STEPS, cross_replace_steps=cross_replace_steps, self_replace_steps=self_replace_steps, local_blend=lb)
+    else:
+        controller = AttentionRefine(prompts, NUM_DDIM_STEPS, cross_replace_steps=cross_replace_steps, self_replace_steps=self_replace_steps, local_blend=lb)
+    if equilizer_params is not None:
+        eq = get_equalizer(prompts[1], equilizer_params["words"], equilizer_params["values"])
+        controller = AttentionReweight(prompts, NUM_DDIM_STEPS, cross_replace_steps=cross_replace_steps,
+                                       self_replace_steps=self_replace_steps, equalizer=eq, local_blend=lb, controller=controller)
+    return controller
