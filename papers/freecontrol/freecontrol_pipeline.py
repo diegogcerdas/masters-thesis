@@ -20,8 +20,8 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
     def ddim_inversion(
         self,
         image: Image.Image,
-        prompt: str,
         num_inference_steps: int,
+        prompt: str = "",
         guidance_scale: float = 1,
         generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
     ):
@@ -143,6 +143,65 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
         image = Image.fromarray(image)
         return image
     
+    @torch.no_grad()
+    def get_features(
+        self,
+        images: List[Image.Image],
+        num_inference_steps: int,
+        num_save_steps: int,
+        feature_blocks: List[str],
+        generator: torch.Generator,
+    ):
+        self.unet = prep_unet_attention(self.unet)
+        self.unet = prep_unet_conv(self.unet)
+
+        features = torch.empty((len(images), num_save_steps, 3, 1280, 24, 24))
+
+        device = self._execution_device
+        self.scheduler = DDIMScheduler.from_config(self.scheduler.config)
+        self.scheduler.set_timesteps(num_inference_steps, device=device)
+
+        for img_i, image in enumerate(images):
+
+            latents, prompt_embeds = self.ddim_inversion(
+                image,
+                num_inference_steps,
+                generator=generator,
+            )
+
+            for i, t in tqdm(enumerate(self.scheduler.timesteps)):
+
+                attn_key_dict = dict()
+                
+                # predict the noise
+                noise_pred = self.unet(latents, t, encoder_hidden_states=prompt_embeds, return_dict=False)[0]
+                # compute the previous noise sample x_t -> x_t-1
+                latents = self.scheduler.step(noise_pred, t, latents, return_dict=False)[0]
+                
+                # get the hidden features
+                hidden_state_dict, _, key_dict, _ = get_self_attn_feat(self.unet, feature_blocks)
+                for name in hidden_state_dict.keys():
+                    def log_to_dict(feat, selected_dict, name):
+                        if name in selected_dict.keys():
+                            selected_dict[name].append(feat)
+                        else:
+                            selected_dict[name] = [feat]
+                    log_to_dict(key_dict[name], attn_key_dict, name)
+
+                def process_feat_dict(feat_dict):
+                    for name in feat_dict.keys():
+                        feat = feat_dict[name]
+                        feat_dict[name] = {}
+                        feat_dict[name]['features'] = torch.cat(feat, dim=0)
+
+                # Only process for the first num_save_steps
+                if i < num_save_steps:
+                    process_feat_dict(attn_key_dict)
+                    for k_i, k in enumerate(attn_key_dict.keys()):
+                        features[img_i][i][k_i] = attn_key_dict[k]['features'].float()
+
+        return features
+        
     @torch.no_grad()
     def latent2image(self, latents, return_type="np"):
         latents = 1 / 0.18215 * latents.detach()
