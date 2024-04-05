@@ -253,5 +253,6 @@ def train_lora(
 
             # backward pass
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(params_to_optimize, 1)
             optimizer.step()
             optimizer.zero_grad()    
