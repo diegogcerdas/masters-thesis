@@ -8,6 +8,7 @@ from torch.utils import data
 import torch.nn.functional as F
 import numpy as np
 from torcheval.metrics.functional import r2_score
+from torchvision import transforms
 
 
 def validate(diffusion_extractor, aggregation_network, dataloader, epoch):
@@ -17,6 +18,7 @@ def validate(diffusion_extractor, aggregation_network, dataloader, epoch):
     for batch in tqdm(dataloader):
         with torch.no_grad():
             imgs, target, _ = batch
+            imgs = transforms.Resize((config["resolution"], config["resolution"]))(imgs)
             imgs, target = imgs.to(device), target.to(device)
             pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=True)
             loss = F.mse_loss(pred, target)
@@ -56,6 +58,7 @@ def train(
         for batch in tqdm(train_dataloader):
 
             imgs, target, _ = batch
+            imgs = transforms.Resize((config["resolution"], config["resolution"]))(imgs)
             imgs, target = imgs.to(device), target.to(device)
             pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs).squeeze()
             loss = F.mse_loss(pred, target)
@@ -88,7 +91,8 @@ if __name__ == "__main__":
             'bottleneck_sequential': False,
         },
         'results_folder': "./readout_results",
-        "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
+        "model_id": "stabilityai/stable-diffusion-2",
+        "resolution": 768,
         "prompt": "",
         "negative_prompt": "",
         "diffusion_mode": "generation",
@@ -102,8 +106,8 @@ if __name__ == "__main__":
         "metric": "cosine",
         "n_neighbors": 0,
 
-        "lr": 1e-4,
-        "batch_size": 64,
+        "lr": 1e-3,
+        "batch_size": 8,
         "num_workers": 18,
         "num_epochs": 15,
         "validation_epochs": 1,
