@@ -4,7 +4,7 @@ import torch
 from PIL import Image
 from tqdm import tqdm
 import numpy as np
-from freecontrol_utils import prep_unet_conv, prep_unet_attention, get_self_attn_feat
+from papers.freecontrol.freecontrol_utils import prep_unet_conv, prep_unet_attention, get_self_attn_feat
 
 
 class FreeControlSDPipeline(StableDiffusionPipeline):
@@ -50,7 +50,7 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
         timesteps = self.inverse_scheduler.timesteps
 
         # 7. Denoising loop
-        for t in tqdm(timesteps):
+        for t in timesteps:
 
             # expand the latents if we are doing classifier free guidance
             latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
@@ -161,7 +161,7 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
         self.scheduler = DDIMScheduler.from_config(self.scheduler.config)
         self.scheduler.set_timesteps(num_inference_steps, device=device)
 
-        for img_i, image in enumerate(images):
+        for img_i, image in tqdm(enumerate(images), desc="Images", total=len(images)):
 
             latents, prompt_embeds = self.ddim_inversion(
                 image,
@@ -169,7 +169,7 @@ class FreeControlSDPipeline(StableDiffusionPipeline):
                 generator=generator,
             )
 
-            for i, t in tqdm(enumerate(self.scheduler.timesteps)):
+            for i, t in enumerate(self.scheduler.timesteps):
 
                 attn_key_dict = dict()
                 
