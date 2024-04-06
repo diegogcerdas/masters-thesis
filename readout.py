@@ -7,19 +7,24 @@ from datasets.nsd_features import NSDFeaturesDataset
 from torch.utils import data
 import torch.nn.functional as F
 import numpy as np
+from torcheval.metrics.functional import r2_score
 
 
 def validate(diffusion_extractor, aggregation_network, dataloader, epoch):
     device = aggregation_network.device
     total_loss = []
+    total_metric = []
     for batch in tqdm(dataloader):
         with torch.no_grad():
             imgs, target, _ = batch
             imgs, target = imgs.to(device), target.to(device)
             pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=True)
             loss = F.mse_loss(pred, target)
+            metric = r2_score(pred, target)
             total_loss.append(loss.item())
+            total_metric.append(metric.item())
     wandb.log({f"val/loss": np.mean(total_loss)}, step=epoch)
+    wandb.log({f"val/metric": np.mean(total_metric)}, step=epoch)
 
 def train(
     diffusion_extractor, 
@@ -52,14 +57,21 @@ def train(
 
             imgs, target, _ = batch
             imgs, target = imgs.to(device), target.to(device)
-            pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs)
+            pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs).squeeze()
             loss = F.mse_loss(pred, target)
+            metric = r2_score(pred, target)
             
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            wandb.log({"train/pred_mean": pred.mean().item()}, step=global_step)
+            wandb.log({"train/pred_std": pred.std().item()}, step=global_step)
+            wandb.log({"train/target_mean": target.mean().item()}, step=global_step)
+            wandb.log({"train/target_std": target.std().item()}, step=global_step)
             
             wandb.log({"train/loss": loss.item()}, step=global_step)
+            wandb.log({"train/metric": metric.item()}, step=global_step)
             wandb.log({"train/diffusion_timestep": diffusion_extractor.save_timestep[0]}, step=global_step)
             global_step += 1
             
@@ -70,13 +82,13 @@ if __name__ == "__main__":
     config = {
         "projection_dim": 384,
         "save_timestep": [0],
-        'num_timesteps': 50,
+        'num_timesteps': 100,
         "aggregation_kwargs": {
             'use_output_head': True,
             'bottleneck_sequential': False,
         },
         'results_folder': "./readout_results",
-        "model_id": "runwayml/stable-diffusion-v1-5",
+        "model_id": "stabilityai/stable-diffusion-xl-base-1.0",
         "prompt": "",
         "negative_prompt": "",
         "diffusion_mode": "generation",
@@ -91,7 +103,7 @@ if __name__ == "__main__":
         "n_neighbors": 0,
 
         "lr": 1e-4,
-        "batch_size": 8,
+        "batch_size": 64,
         "num_workers": 18,
         "num_epochs": 15,
         "validation_epochs": 1,
