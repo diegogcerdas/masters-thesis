@@ -80,7 +80,7 @@ if __name__ == "__main__":
         "negative_prompt": "",
         "diffusion_mode": "generation",
 
-        "data_dir": "./data/NSD",
+        "data_dir": "./data",
         "subject": 1,
         "roi": "floc-faces",
         "hemisphere": "right",
@@ -102,10 +102,6 @@ if __name__ == "__main__":
         "wandb_mode": "online",
         "wandb_name": "test",
     }
-
-    diffusion_extractor, aggregation_network = load_models(config)
-    config["output_resolution"] = diffusion_extractor.output_resolution
-    config["load_resolution"] = diffusion_extractor.load_resolution
     
     wandb.init(
         name=config['wandb_name'],
@@ -113,8 +109,6 @@ if __name__ == "__main__":
         entity=config['wandb_entity'],
         mode=config['wandb_mode'],
     )
-
-    optimizer = load_optimizer(config, aggregation_network)
 
     # Initialize dataset
     nsd = NaturalScenesDataset(
@@ -136,6 +130,12 @@ if __name__ == "__main__":
     del nsd
 
     config['aggregation_kwargs']['output_head_channels'] = dataset.target_size
+
+    diffusion_extractor, aggregation_network = load_models(config)
+    config["output_resolution"] = diffusion_extractor.output_resolution
+    config["load_resolution"] = diffusion_extractor.load_resolution
+
+    optimizer = load_optimizer(config, aggregation_network)
 
     # Initialize dataloaders (split into train and validation sets)
     train_size = int(0.9 * len(dataset))
