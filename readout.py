@@ -6,6 +6,7 @@ from datasets.nsd import NaturalScenesDataset
 from datasets.nsd_features import NSDFeaturesDataset
 from torch.utils import data
 import torch.nn.functional as F
+import numpy as np
 
 
 def validate(diffusion_extractor, aggregation_network, dataloader, epoch):
@@ -18,7 +19,7 @@ def validate(diffusion_extractor, aggregation_network, dataloader, epoch):
             pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=True)
             loss = F.mse_loss(pred, target)
             total_loss.append(loss.item())
-    wandb.log({f"val/loss": torch.mean(total_loss).item()}, step=epoch)
+    wandb.log({f"val/loss": np.mean(total_loss)}, step=epoch)
 
 def train(
     diffusion_extractor, 
@@ -69,7 +70,7 @@ if __name__ == "__main__":
     config = {
         "projection_dim": 384,
         "save_timestep": [0],
-        'num_timesteps': 1000,
+        'num_timesteps': 50,
         "aggregation_kwargs": {
             'use_output_head': True,
             'bottleneck_sequential': False,

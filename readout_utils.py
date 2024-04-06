@@ -27,7 +27,7 @@ def load_optimizer(config, aggregation_network):
     return optimizer
 
 def get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=False):
-    with torch.inference_mode():
+    with torch.no_grad():
         feats, _ = diffusion_extractor.forward(imgs, eval_mode=eval_mode)
         b, s, l, w, h = feats.shape
     diffusion_hyperfeats = aggregation_network(feats.float().view((b, -1, w, h)), diffusion_extractor.emb)

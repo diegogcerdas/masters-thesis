@@ -155,12 +155,9 @@ class AggregationNetwork(nn.Module):
         super().__init__()
         self.bottleneck_layers = nn.ModuleList()
         self.feature_dims = feature_dims    
-        # For CLIP symmetric cross entropy loss during training
-        self.logit_scale = torch.ones([]) * np.log(1 / 0.07)
         self.device = device
         self.save_timestep = save_timestep
 
-        self.mixing_weights_names = []
         for l, feature_dim in enumerate(self.feature_dims):
             bottleneck_layer = BottleneckBlock(
                 in_channels=feature_dim,
@@ -171,9 +168,6 @@ class AggregationNetwork(nn.Module):
             if bottleneck_sequential:
                 bottleneck_layer = nn.Sequential(bottleneck_layer)
             self.bottleneck_layers.append(bottleneck_layer)
-            for t in save_timestep:
-                # 1-index the layer name following prior work
-                self.mixing_weights_names.append(f"timestep-{save_timestep}_layer-{l+1}")
         
         self.bottleneck_layers = self.bottleneck_layers.to(device)
         mixing_weights = torch.ones(len(self.bottleneck_layers) * len(save_timestep))
@@ -199,6 +193,7 @@ class AggregationNetwork(nn.Module):
             #     nn.Tanh()
             # )
             self.output_head = nn.Sequential(
+                nn.BatchNorm2d(projection_dim),
                 nn.Conv2d(projection_dim, 64, kernel_size=3, stride=1, padding=1),
                 nn.SiLU(True),
                 nn.Conv2d(64, 8, kernel_size=3, stride=1, padding=1),
