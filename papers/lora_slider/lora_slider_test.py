@@ -1,5 +1,5 @@
 import torch
-from diffusers import AutoencoderKL, LMSDiscreteScheduler, UNet2DConditionModel
+from diffusers import StableDiffusionPipeline, DDIMScheduler
 from PIL import Image
 from tqdm import tqdm
 from transformers import AutoTokenizer, CLIPTextModel
@@ -9,85 +9,78 @@ from utils.img_utils import save_images
 
 
 def run_test(
-    args_pretrained_model_name_or_path: str,
-    args_alpha: float,
-    args_rank: int,
-    args_training_method: str,
-    args_lora_weights_path: str,
-    args_prompt: str,
-    args_scales: list,
-    args_start_noise: int,
-    args_seed: int,
-    args_device: str,
-    args_save_folder: str,
+    pretrained_model_name_or_path: str,
+    alpha: float,
+    rank: int,
+    training_method: str,
+    lora_weights_path: str,
+    prompt: str,
+    scales: list,
+    start_noise: int,
+    seed: int,
+    device: str,
+    save_folder: str,
 ):
     height = 512
     width = 512
     ddim_steps = 50
     guidance_scale = 7.5
 
-    noise_scheduler = LMSDiscreteScheduler(
-        beta_start=0.00085,
-        beta_end=0.012,
-        beta_schedule="scaled_linear",
-        num_train_timesteps=1000,
-    )
-    tokenizer = AutoTokenizer.from_pretrained(
-        args_pretrained_model_name_or_path, subfolder="tokenizer"
-    )
-    text_encoder = CLIPTextModel.from_pretrained(
-        args_pretrained_model_name_or_path, subfolder="text_encoder"
-    ).to(args_device)
-    vae = AutoencoderKL.from_pretrained(
-        args_pretrained_model_name_or_path, subfolder="vae"
-    ).to(args_device)
-    unet = UNet2DConditionModel.from_pretrained(
-        args_pretrained_model_name_or_path, subfolder="unet"
-    ).to(args_device)
+    # Load the pretrained model
+    pipe = StableDiffusionPipeline.from_pretrained(pretrained_model_name_or_path)
+    pipe = pipe.to(device)
+    pipe.set_progress_bar_config(disable=True)
 
-    unet.requires_grad_(False)
-    vae.requires_grad_(False)
-    text_encoder.requires_grad_(False)
+    # Freeze parameters of models to save more memory
+    pipe.vae.requires_grad_(False)
+    pipe.text_encoder.requires_grad_(False)
+    pipe.unet.requires_grad_(False)
+
+    # Disable safety checker
+    pipe.safety_checker = None   
+
+    # Switch to DDIM scheduler
+    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
+    pipe.scheduler.set_timesteps(num_timesteps)
 
     network = LoRANetwork(
-        unet,
-        rank=args_rank,
-        alpha=args_alpha,
-        train_method=args_training_method,
-    ).to(args_device)
-    network.load_state_dict(torch.load(args_lora_weights_path))
+        pipe.unet,
+        rank=rank,
+        alpha=alpha,
+        train_method=training_method,
+    ).to(device)
+    network.load_state_dict(torch.load(lora_weights_path))
 
     images_list = []
 
-    for scale in args_scales:
-        noise_scheduler.set_timesteps(ddim_steps)
+    for scale in scales:
 
-        generator = torch.Generator(device=args_device).manual_seed(args_seed)
+        generator = torch.Generator(device=device).manual_seed(seed)
 
         cond_input = tokenizer(
-            args_prompt,
+            prompt,
             padding="max_length",
             max_length=tokenizer.model_max_length,
             truncation=True,
             return_tensors="pt",
         )
-        cond_embeddings = text_encoder(cond_input.input_ids.to(args_device))[0]
+        cond_embeddings = text_encoder(cond_input.input_ids.to(device))[0]
         max_length = cond_input.input_ids.shape[-1]
         uncond_input = tokenizer(
             [""], padding="max_length", max_length=max_length, return_tensors="pt"
         )
-        uncond_embeddings = text_encoder(uncond_input.input_ids.to(args_device))[0]
+        uncond_embeddings = text_encoder(uncond_input.input_ids.to(device))[0]
         text_embeddings = torch.cat([uncond_embeddings, cond_embeddings])
 
         latents = torch.randn(
             (1, unet.in_channels, height // 8, width // 8),
             generator=generator,
-            device=args_device,
+            device=device,
         )
         latents = latents * noise_scheduler.init_noise_sigma
 
         for t in tqdm(noise_scheduler.timesteps):
-            if t > args_start_noise:
+            if t > start_noise:
                 network.set_lora_slider(scale=0)
             else:
                 network.set_lora_slider(scale=scale)
@@ -119,4 +112,4 @@ def run_test(
         pil_images = [Image.fromarray(image) for image in images]
         images_list.append(pil_images[0])
 
-    save_images(images_list, args_save_folder)
+    save_images(images_list, save_folder)
