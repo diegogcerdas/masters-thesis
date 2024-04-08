@@ -11,27 +11,28 @@ from torcheval.metrics.functional import r2_score
 from torchvision import transforms
 
 
-def validate(diffusion_extractor, aggregation_network, dataloader, epoch):
+def validate(diffusion_extractor, aggregation_network, resolution, dataloader, step):
     device = aggregation_network.device
     total_loss = []
     total_metric = []
     for batch in tqdm(dataloader):
         with torch.no_grad():
             imgs, target, _ = batch
-            imgs = transforms.Resize((config["resolution"], config["resolution"]))(imgs)
+            # imgs = transforms.Resize((resolution, resolution))(imgs)
             imgs, target = imgs.to(device), target.to(device)
-            pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=True)
+            pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=True).squeeze()
             loss = F.mse_loss(pred, target)
             metric = r2_score(pred, target)
             total_loss.append(loss.item())
             total_metric.append(metric.item())
-    wandb.log({f"val/loss": np.mean(total_loss)}, step=epoch)
-    wandb.log({f"val/metric": np.mean(total_metric)}, step=epoch)
+    wandb.log({f"val/loss": np.mean(total_loss)}, step=step)
+    wandb.log({f"val/metric": np.mean(total_metric)}, step=step)
 
 def train(
     diffusion_extractor, 
     aggregation_network, 
     optimizer, 
+    resolution,
     train_dataloader, 
     val_dataloader,
     num_epochs,
@@ -51,22 +52,22 @@ def train(
                 fig = log_aggregation_network(aggregation_network, config)
                 wandb.log({f"mixing_weights": fig}, step=epoch)
                 save_model(config, aggregation_network, optimizer, global_step)
-                validate(diffusion_extractor, aggregation_network, val_dataloader, epoch)
+                validate(diffusion_extractor, aggregation_network, resolution, val_dataloader, global_step)
 
         #################### TRAINING ####################
 
         for batch in tqdm(train_dataloader):
 
             imgs, target, _ = batch
-            imgs = transforms.Resize((config["resolution"], config["resolution"]))(imgs)
+            # imgs = transforms.Resize((resolution, resolution))(imgs)
             imgs, target = imgs.to(device), target.to(device)
             pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs).squeeze()
             loss = F.mse_loss(pred, target)
             metric = r2_score(pred, target)
             
-            optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            optimizer.zero_grad()
 
             wandb.log({"train/pred_mean": pred.mean().item()}, step=global_step)
             wandb.log({"train/pred_std": pred.std().item()}, step=global_step)
@@ -85,14 +86,14 @@ if __name__ == "__main__":
     config = {
         "projection_dim": 384,
         "save_timestep": [0],
-        'num_timesteps': 100,
+        'num_timesteps': 50,
         "aggregation_kwargs": {
             'use_output_head': True,
             'bottleneck_sequential': False,
         },
         'results_folder': "./readout_results",
-        "model_id": "stabilityai/stable-diffusion-2",
-        "resolution": 768,
+        "model_id": "runwayml/stable-diffusion-v1-5",
+        "resolution": 512,
         "prompt": "",
         "negative_prompt": "",
         "diffusion_mode": "generation",
@@ -106,7 +107,7 @@ if __name__ == "__main__":
         "metric": "cosine",
         "n_neighbors": 0,
 
-        "lr": 1e-3,
+        "lr": 1e-4,
         "batch_size": 8,
         "num_workers": 18,
         "num_epochs": 15,
@@ -162,7 +163,7 @@ if __name__ == "__main__":
         train_set,
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
-        drop_last=False,
+        drop_last=True,
         shuffle=True,
         pin_memory=True,
     )
@@ -170,8 +171,8 @@ if __name__ == "__main__":
         val_set,
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
-        drop_last=False,
+        drop_last=True,
         shuffle=False,
     )
 
-    train(diffusion_extractor, aggregation_network, optimizer, train_dataloader, val_dataloader, config['num_epochs'], config['validation_epochs'], config['device'])
+    train(diffusion_extractor, aggregation_network, optimizer, config['resolution'], train_dataloader, val_dataloader, config['num_epochs'], config['validation_epochs'], config['device'])
