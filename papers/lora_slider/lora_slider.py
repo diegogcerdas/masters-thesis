@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import torch
-from diffusers import StableDiffusionPipeline, DDIMScheduler
+from diffusers import StableDiffusionPipeline, DDPMScheduler, LMSDiscreteScheduler
 from pytorch_lightning import seed_everything
 from PIL import Image
 from tqdm import tqdm
@@ -44,13 +44,14 @@ def run_train(
     pipe.vae.requires_grad_(False)
     pipe.text_encoder.requires_grad_(False)
     pipe.unet.requires_grad_(False)
+    pipe.unet.eval()
+    pipe.vae.eval()
 
     # Disable safety checker
     pipe.safety_checker = None   
 
     # Switch to DDIM scheduler
-    pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
-    pipe.scheduler.set_timesteps(num_timesteps)
+    pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
 
     network = LoRANetwork(
         pipe.unet,
@@ -68,9 +69,8 @@ def run_train(
     positive_prompt = encode_prompts(pipe.tokenizer, pipe.text_encoder, [""])
     neutral_prompt = encode_prompts(pipe.tokenizer, pipe.text_encoder, [""])
 
-    folder = os.path.join(folder_main, folders[0])
     filenames = np.array([
-        os.path.join(folder, f) for f in os.listdir(folder) if f.endswith(".png")
+        f for f in os.listdir(os.path.join(folder_main, folders[0])) if f.endswith(".png")
     ])
 
     for epoch in tqdm(range(num_epochs), desc="Epochs"):
@@ -79,9 +79,18 @@ def run_train(
 
         if epoch % validation_epochs == 0:
 
+            pipe.scheduler = LMSDiscreteScheduler(
+                beta_start=0.00085,
+                beta_end=0.012,
+                beta_schedule="scaled_linear",
+                num_train_timesteps=1000,
+            )
+
             images_list = []
 
             for scale in validation_scales:
+
+                pipe.scheduler.set_timesteps(num_timesteps, device=device)
 
                 generator = torch.Generator(device=device).manual_seed(seed)
 
@@ -146,11 +155,14 @@ def run_train(
 
         #################### TRAINING ####################
 
+        pipe.scheduler = DDPMScheduler.from_config(pipe.scheduler.config)
+
         filenames = filenames[np.random.permutation(len(filenames))]
 
         for f in filenames:
 
-            timestep = torch.randint(0, num_timesteps, (1,)).item()
+            pipe.scheduler.set_timesteps(num_timesteps, device=device)
+            timestep = torch.randint(1, num_timesteps - 1, (1,)).item()
 
             img1 = Image.open(f"{folder_main}/{folders[0]}/{f}").resize((resolution, resolution))
             img2 = Image.open(f"{folder_main}/{folders[1]}/{f}").resize((resolution, resolution))
@@ -179,12 +191,17 @@ def run_train(
                 noisy_latents_high = noisy_latents_high.to(device)
                 noise_high = noise_high.to(device)
 
+                pipe.scheduler.set_timesteps(1000)
+                current_timestep = pipe.scheduler.timesteps[
+                    int(timestep * 1000 / num_timesteps)
+                ]
+
             network.set_lora_slider(scale=scales[0])
             with network:
                 noise_pred_low = predict_noise(
                     pipe.unet,
                     pipe.scheduler,
-                    timestep,
+                    current_timestep,
                     noisy_latents_low,
                     concat_embeddings(
                         unconditional_prompt,
@@ -201,7 +218,7 @@ def run_train(
                 noise_pred_high = predict_noise(
                     pipe.unet,
                     pipe.scheduler,
-                    timestep,
+                    current_timestep,
                     noisy_latents_high,
                     concat_embeddings(
                         unconditional_prompt,
