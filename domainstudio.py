@@ -105,10 +105,14 @@ def run(
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=train_batch_size, shuffle=True, collate_fn=c_fn, pin_memory=True
     )
-
     train_dataloader2 = torch.utils.data.DataLoader(
         train_dataset, batch_size=train_batch_size, shuffle=True, collate_fn=c_fn, pin_memory=True
     )
+
+    weight_dtype = torch.float16
+    vae.to(device, dtype=weight_dtype)
+    if not train_text_encoder:
+        text_encoder.to(device, dtype=weight_dtype)
 
     text_enc_context = nullcontext() if train_text_encoder else torch.no_grad()
     sfm = torch.nn.Softmax(dim=1)
@@ -162,7 +166,7 @@ def run(
 
             # Convert images to latent space
             with torch.no_grad():
-                latent_dist = vae.encode(batch["pixel_values"].to(device)).latent_dist
+                latent_dist = vae.encode(batch["pixel_values"].to(device, dtype=weight_dtype)).latent_dist
                 latents = latent_dist.sample() * 0.18215
 
             # Sample noise that we'll add to the latents
@@ -250,7 +254,7 @@ def run(
             rel_wave_loss = kl_loss(torch.log(dist_source), dist_target)
 
             batch2 = next(iter(train_dataloader2))
-            batch2_images = batch2["pixel_values"].to(device, non_blocking=True)
+            batch2_images = batch2["pixel_values"].to(device, non_blocking=True, dtype=weight_dtype)
             data_instance, _ = torch.chunk(batch2_images, 2, dim=0)
             data_instance_wave = LH(data_instance)+HL(data_instance)+HH(data_instance)
             wave_loss = F.mse_loss(model_pred_image_wave.float(), data_instance_wave.float(), reduction="mean")
