@@ -5,13 +5,12 @@ import torch
 import torch.nn.functional as F
 import torch.utils.checkpoint
 from diffusers import AutoencoderKL, DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
-from diffusers.utils.import_utils import is_xformers_available
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 from pytorch_lightning import seed_everything
 import uuid
 from utils.img_utils import save_images
-from domainstudio_utils import DreamBoothDataset, collate_fn, get_wave
+from domainstudio_utils import DreamBoothDataset, collate_fn
 
 def run(
     pretrained_model_name_or_path: str,
@@ -76,17 +75,11 @@ def run(
     text_encoder = CLIPTextModel.from_pretrained(pretrained_model_name_or_path, subfolder="text_encoder").to(device)
     vae = AutoencoderKL.from_pretrained(pretrained_model_name_or_path, subfolder="vae").to(device)
     unet = UNet2DConditionModel.from_pretrained(pretrained_model_name_or_path, subfolder="unet").to(device)
-    unet_source = UNet2DConditionModel.from_pretrained(pretrained_model_name_or_path, subfolder="unet").to(device)
     noise_scheduler = DDPMScheduler.from_config(pretrained_model_name_or_path, subfolder="scheduler")
 
-    unet_source.requires_grad_(False)
     vae.requires_grad_(False)
     if not train_text_encoder:
         text_encoder.requires_grad_(False)
-
-    if is_xformers_available():
-        vae.enable_xformers_memory_efficient_attention()
-        unet.enable_xformers_memory_efficient_attention()
 
     params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters()) if train_text_encoder else unet.parameters()
     optimizer = torch.optim.AdamW(params_to_optimize, lr=learning_rate)
@@ -105,14 +98,6 @@ def run(
     train_dataloader = torch.utils.data.DataLoader(
         train_dataset, batch_size=train_batch_size, shuffle=True, collate_fn=c_fn, pin_memory=True
     )
-    train_dataloader2 = torch.utils.data.DataLoader(
-        train_dataset, batch_size=train_batch_size, shuffle=True, collate_fn=c_fn, pin_memory=True
-    )
-
-    weight_dtype = torch.float16
-    vae.to(device, dtype=weight_dtype)
-    if not train_text_encoder:
-        text_encoder.to(device, dtype=weight_dtype)
 
     text_enc_context = nullcontext() if train_text_encoder else torch.no_grad()
     sfm = torch.nn.Softmax(dim=1)
@@ -134,8 +119,6 @@ def run(
                 safety_checker=None,
             )
             pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
-            if is_xformers_available():
-                pipeline.enable_xformers_memory_efficient_attention()
             save_dir = os.path.join(outputs_dir, str(epoch))
             pipeline.save_pretrained(save_dir)
 
@@ -162,11 +145,11 @@ def run(
         if train_text_encoder:
             text_encoder.train()
 
-        for step, batch in enumerate(train_dataloader):
+        for batch in train_dataloader:
 
             # Convert images to latent space
             with torch.no_grad():
-                latent_dist = vae.encode(batch["pixel_values"].to(device, dtype=weight_dtype)).latent_dist
+                latent_dist = vae.encode(batch["pixel_values"].to(device)).latent_dist
                 latents = latent_dist.sample() * 0.18215
 
             # Sample noise that we'll add to the latents
@@ -224,41 +207,6 @@ def run(
 
             rel_loss = kl_loss(torch.log(dist_target), dist_source)
 
-            LH, HL, HH = get_wave(model_pred_image)
-
-            model_pred_image_wave = LH(model_pred_image)+HL(model_pred_image)+HH(model_pred_image)
-            model_pred_prior_wave = LH(model_pred_image_prior)+HL(model_pred_image_prior)+HH(model_pred_image_prior)
-            
-            dist_source = torch.zeros([bs_part, bs_part-1]).cuda()
-            for pair1 in range(bs_part):
-                tmpc = 0
-                anchor_feat = torch.unsqueeze(model_pred_image_wave[pair1].reshape(-1),0)
-                for pair2 in range(bs_part):
-                    if pair1 != pair2:
-                        target_feat = torch.unsqueeze(model_pred_image_wave[pair2].reshape(-1),0)
-                        dist_source[pair1, tmpc] = sim(anchor_feat, target_feat)
-                        tmpc += 1
-            dist_source = sfm(dist_source)
-
-            dist_target = torch.zeros([bs_part, bs_part-1]).cuda()
-            for pair1 in range(bs_part):
-                tmpc = 0
-                anchor_feat = torch.unsqueeze(model_pred_prior_wave[pair1].reshape(-1),0)
-                for pair2 in range(bs_part):
-                    if pair1 != pair2:
-                        target_feat = torch.unsqueeze(model_pred_prior_wave[pair2].reshape(-1),0)
-                        dist_target[pair1, tmpc] = sim(anchor_feat, target_feat)
-                        tmpc += 1
-            dist_target = sfm(dist_target)
-
-            rel_wave_loss = kl_loss(torch.log(dist_source), dist_target)
-
-            batch2 = next(iter(train_dataloader2))
-            batch2_images = batch2["pixel_values"].to(device, non_blocking=True, dtype=weight_dtype)
-            data_instance, _ = torch.chunk(batch2_images, 2, dim=0)
-            data_instance_wave = LH(data_instance)+HL(data_instance)+HH(data_instance)
-            wave_loss = F.mse_loss(model_pred_image_wave.float(), data_instance_wave.float(), reduction="mean")
-
             # Sample a random timestep for each image
             timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
             timesteps = timesteps.long()
@@ -288,8 +236,7 @@ def run(
             prior_loss = F.mse_loss(model_pred_prior.float(), target_prior.float(), reduction="mean")
 
             # Add the losses to the instance loss.
-            loss = loss + prior_loss_weight * prior_loss + image_loss_weight * rel_loss \
-                + hf_loss_weight * rel_wave_loss + hfmse_loss_weight * wave_loss
+            loss = loss + prior_loss_weight * prior_loss + image_loss_weight * rel_loss
 
             loss.backward()
             optimizer.step()
