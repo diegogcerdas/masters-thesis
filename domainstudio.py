@@ -11,10 +11,12 @@ from pytorch_lightning import seed_everything
 import uuid
 from utils.img_utils import save_images
 from domainstudio_utils import DreamBoothDataset, collate_fn
+from peft import LoraConfig
 
 def run(
     pretrained_model_name_or_path: str,
     resolution: int,
+    lora_rank: int,
     num_timesteps: int,
     instance_prompt: str,
     train_text_encoder: bool,
@@ -27,8 +29,6 @@ def run(
     validation_prompt: str,
     prior_loss_weight: float,
     image_loss_weight: float,
-    hf_loss_weight: float,
-    hfmse_loss_weight: float,
     learning_rate: float,
     num_train_epochs: int,
     train_batch_size: int,
@@ -39,15 +39,15 @@ def run(
     seed_everything(seed)
 
     # Generate images for prior preservation
-    pipeline = StableDiffusionPipeline.from_pretrained(pretrained_model_name_or_path).to(device)
-    pipeline.set_progress_bar_config(disable=True)
-    pipeline.safety_checker = None
-    pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
-
     os.makedirs(class_data_dir, exist_ok=True)
     cur_class_images = len([f for f in os.listdir(class_data_dir) if f.endswith(".png")])
 
     if cur_class_images < num_class_images:
+
+        pipeline = StableDiffusionPipeline.from_pretrained(pretrained_model_name_or_path).to(device)
+        pipeline.set_progress_bar_config(disable=True)
+        pipeline.safety_checker = None
+        pipeline.scheduler = DDIMScheduler.from_config(pipeline.scheduler.config)
 
         num_new_images = num_class_images - cur_class_images
         images = []
@@ -64,9 +64,9 @@ def run(
         save_images(images, class_data_dir, names)
         del images
 
-    del pipeline
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+        del pipeline
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     # Load the tokenizer
     tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_name_or_path, subfolder="tokenizer")
@@ -78,10 +78,38 @@ def run(
     noise_scheduler = DDPMScheduler.from_config(pretrained_model_name_or_path, subfolder="scheduler")
 
     vae.requires_grad_(False)
-    if not train_text_encoder:
-        text_encoder.requires_grad_(False)
+    text_encoder.requires_grad_(False)
+    unet.requires_grad_(False)
 
-    params_to_optimize = itertools.chain(unet.parameters(), text_encoder.parameters()) if train_text_encoder else unet.parameters()
+    # Add new LoRA weights to UNet
+    unet_lora_config = LoraConfig(
+        r=lora_rank,
+        lora_alpha=lora_rank,
+        init_lora_weights="gaussian",
+        target_modules=[
+            "to_k",
+            "to_q",
+            "to_v",
+            "to_out.0",
+            "add_k_proj",
+            "add_v_proj",
+        ],
+    )
+    unet.add_adapter(unet_lora_config)
+
+    # Add new LoRA weights to text encoder
+    if train_text_encoder:
+        text_lora_config = LoraConfig(
+            r=lora_rank,
+            lora_alpha=lora_rank,
+            init_lora_weights="gaussian",
+            target_modules=["q_proj", "k_proj", "v_proj", "out_proj"],
+        )
+        text_encoder.add_adapter(text_lora_config)
+
+    params_to_optimize = list(filter(lambda p: p.requires_grad, unet.parameters()))
+    if train_text_encoder:
+        params_to_optimize = params_to_optimize + list(filter(lambda p: p.requires_grad, text_encoder.parameters()))
     optimizer = torch.optim.AdamW(params_to_optimize, lr=learning_rate)
 
     train_dataset = DreamBoothDataset(

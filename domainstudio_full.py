@@ -8,6 +8,7 @@ if __name__ == '__main__':
     run(
         pretrained_model_name_or_path="CompVis/stable-diffusion-v1-4",
         resolution=512,
+        lora_rank=16,
         num_timesteps=50,
         instance_prompt="a [V] animal",
         train_text_encoder=False,
@@ -20,8 +21,6 @@ if __name__ == '__main__':
         validation_prompt="a [V] black bear",
         prior_loss_weight=1.0,
         image_loss_weight=1e+2,
-        hf_loss_weight=1e+2,
-        hfmse_loss_weight=0.1,
         learning_rate=5e-6,
         num_train_epochs=50,
         train_batch_size=4,
