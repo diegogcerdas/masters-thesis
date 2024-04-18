@@ -1,4 +1,3 @@
-import json
 import os
 import torch
 import types
@@ -67,7 +66,7 @@ def run(
                 chain = x_ts,
                 t_early = t_early,
                 output_type = 'pil',
-            ).images[0]
+            ).images[1]
 
         os.makedirs(outputs_dir, exist_ok=True)
         image.save(os.path.join(outputs_dir, f'{m}.png'))     
