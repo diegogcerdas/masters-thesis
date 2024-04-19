@@ -39,10 +39,74 @@ subsets = [
     'vehicle_not_animal_person',
 ]
 
-img_f = 'monalisa.png'
-output_dir = './outputs/monalisa'
-mults = range(-15, 16)
-prompt = 'a painting of the mona lisa'
+img_f = 'ant.png'
+output_dir = './outputs/ant'
+mults = [-15, -10, -5, 0, 5, 10, 15]
+prompt = 'a painting of an ant'
+
+@torch.no_grad()
+def ddim_inversion(
+    image: Image.Image,
+    num_inference_steps: int,
+    prompt: str,
+    guidance_scale: float,
+    seed: int,
+    device: str,
+):
+    pipeline = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1").to(device)
+    generator = torch.Generator(device=device).manual_seed(seed)
+
+    # 1. Define call parameters
+    do_classifier_free_guidance = guidance_scale > 1.0
+    inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
+
+    # 2. Preprocess image
+    image = pipeline.image_processor.preprocess(image)
+
+    def prepare_image_latents(pipeline, image, dtype, device, generator=None):
+        image = image.to(device=device, dtype=dtype)
+        latents = pipeline.vae.encode(image).latent_dist.sample(generator)
+        latents = pipeline.vae.config.scaling_factor * latents
+        latents = torch.cat([latents], dim=0)
+        return latents
+
+    # 3. Prepare latent variables
+    latents = prepare_image_latents(image, pipeline.vae.dtype, device, generator)
+
+    # 4. Encode input prompt
+    num_images_per_prompt = 1
+    prompt_embeds, _ = pipeline.encode_prompt(
+        prompt,
+        device,
+        num_images_per_prompt,
+        do_classifier_free_guidance,
+    )
+
+    # 6. Prepare timesteps
+    inverse_scheduler.set_timesteps(num_inference_steps, device=device)
+    timesteps = inverse_scheduler.timesteps
+
+    # 7. Denoising loop
+    for t in timesteps:
+
+        # expand the latents if we are doing classifier free guidance
+        latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
+        latent_model_input = inverse_scheduler.scale_model_input(latent_model_input, t)
+
+        # predict the noise residual
+        noise_pred = pipeline.unet(latent_model_input, t, encoder_hidden_states=prompt_embeds).sample
+
+        # perform guidance
+        if do_classifier_free_guidance:
+            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+
+        # compute the previous noisy sample x_t -> x_t-1
+        latents = inverse_scheduler.step(noise_pred, t, latents).prev_sample
+
+    inverted_latents = latents.detach().clone()
+
+    return inverted_latents, prompt_embeds
 
 def get_encoder(roi):
     nsd = NaturalScenesDataset(
@@ -73,6 +137,15 @@ dtype = next(pipe.image_encoder.parameters()).dtype
 
 img_test = Image.open(img_f).convert('RGB').resize((768,768))
 
+inverted_latents, _ = ddim_inversion(
+    image=img_test,
+    num_inference_steps=50,
+    prompt=prompt,
+    guidance_scale=7.5,
+    seed=seed,
+    device=device,
+)
+
 # Get CLIP vision embeddings
 img_test = pipe.feature_extractor(images=img_test, return_tensors="pt").pixel_values
 img_test = img_test.to(device=device, dtype=dtype)
@@ -95,6 +168,7 @@ for roi in rois:
             generator = torch.Generator(device=device).manual_seed(seed)
             emb = img_test_embeds + mult * shift_vector
             img = pipe(
+                latents=inverted_latents,
                 prompt=prompt,
                 generator=generator,
                 image_embeds=emb,
