@@ -1,14 +1,10 @@
 from diffusers import StableUnCLIPImg2ImgPipeline, StableDiffusionPipeline, DDIMInverseScheduler
-from diffusers.utils import load_image
 import torch
 from PIL import Image
 import numpy as np
-import matplotlib.pyplot as plt
 import torch
 from datasets.nsd import NaturalScenesDataset
 from datasets.nsd_features import NSDFeaturesDataset
-import json
-import os
 import numpy as np
 from PIL import Image
 from sklearn.linear_model import LinearRegression
@@ -19,7 +15,7 @@ from utils.img_utils import save_images
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
 subject = 1
-data_root = './data/NSD'
+data_root = './data'
 seed = 0
 
 hemisphere = 'right'
@@ -39,10 +35,10 @@ subsets = [
     'vehicle_not_animal_person',
 ]
 
-img_f = 'ant.png'
-output_dir = './outputs/ant'
-mults = [-15, -10, -5, 0, 5, 10, 15]
-prompt = 'a painting of an ant'
+img_f = 'burger.png'
+output_dir = './outputs/burger'
+mults = range(-15, 16)
+prompt = 'a photo of a burger'
 
 @torch.no_grad()
 def ddim_inversion(
@@ -71,7 +67,7 @@ def ddim_inversion(
         return latents
 
     # 3. Prepare latent variables
-    latents = prepare_image_latents(image, pipeline.vae.dtype, device, generator)
+    latents = prepare_image_latents(pipeline, image, pipeline.vae.dtype, device, generator)
 
     # 4. Encode input prompt
     num_images_per_prompt = 1
@@ -141,7 +137,7 @@ inverted_latents, _ = ddim_inversion(
     image=img_test,
     num_inference_steps=50,
     prompt=prompt,
-    guidance_scale=7.5,
+    guidance_scale=1,
     seed=seed,
     device=device,
 )
@@ -176,7 +172,7 @@ for roi in rois:
             ).images[0]
             images.append(img)
 
-            feats = feature_extractor(transforms.ToTensor()(img))
+            feats = feature_extractor(transforms.ToTensor()(img).unsqueeze(0)).detach().cpu().numpy()
             pred = encoder.predict(feats)
             acts.append(pred)
 
