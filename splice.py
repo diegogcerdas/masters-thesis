@@ -41,7 +41,7 @@ class SPLICE(nn.Module):
         for i in range(embedding.shape[0]):
             clf.fit(self.dictionary.T.cpu().numpy(), embedding[i,:].cpu().numpy())
             skl_weights.append(torch.tensor(clf.coef_))
-        weights = torch.stack(skl_weights, dim=0).to(self.device)
+        weights = torch.stack(skl_weights, dim=0).to(self.device).float()
         return weights
 
     def recompose_vector(self, weights):
@@ -70,6 +70,7 @@ def load(
 
     concepts = torch.nn.functional.normalize(torch.stack(concepts).squeeze(), dim=1)
     concepts = torch.nn.functional.normalize(concepts-torch.mean(concepts, dim=0), dim=1)
+    concepts = concepts.float()
 
     splice = SPLICE(
         dictionary=concepts,

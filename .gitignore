@@ -11,6 +11,6 @@ test*.ipynb
 cache/
 lightning_logs/
 subsets/
-adjective_vectors/
+word_pairs_vectors/
 pc_vectors/
 source_images/
