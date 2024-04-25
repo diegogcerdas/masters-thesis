@@ -1,21 +1,24 @@
 import pandas as pd
 import open_clip
 import torch
+from tqdm import tqdm
+import numpy as np
+import os
 
-df = pd.read_csv('adjective_pairs.csv')
+df = pd.read_csv('adjective_pairs_wordnet.csv')
 
 clip, _, _ = open_clip.create_model_and_transforms(model_name="ViT-H-14", pretrained="laion2b_s32b_b79k")
 tokenizer = open_clip.get_tokenizer("ViT-H-14")
 
-vecs = []
+os.makedirs('adjective_vectors', exist_ok=True)
 
-for word1, word2 in df.values:
+for i, (word1, word2) in tqdm(enumerate(df.values), total=len(df)):
 
-    text = tokenizer([word1, word2])
-    x = clip.encode_text(text)
-    shift_vector = (x[0] - x[1])
-    vecs.append(shift_vector)
+    with torch.no_grad():
 
-vecs = torch.stack(vecs)
+        text = tokenizer([word1, word2])
+        x = clip.encode_text(text)
+        shift_vector = (x[0] - x[1]).float().detach().cpu().numpy()
+        shift_vector = shift_vector / np.linalg.norm(shift_vector)
 
-torch.save(vecs, f'adjective_vectors.pt')
+        np.save(f'adjective_vectors/{i}.npy', shift_vector)
