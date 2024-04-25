@@ -11,3 +11,5 @@ test*.ipynb
 cache/
 lightning_logs/
 subsets/
+adjective_vectors/
+pc_vectors/
