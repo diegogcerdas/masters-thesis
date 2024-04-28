@@ -56,17 +56,24 @@ class SPLICE(nn.Module):
 
 def load(
     concepts_dir: str,
+    indices: list[int],
     device = "cuda" if torch.cuda.is_available() else "cpu", 
     **kwargs
 ):
 
     filenames = [int(f.replace(".npy", "")) for f in os.listdir(concepts_dir) if f.endswith(".npy")]
     filenames = [os.path.join(concepts_dir, f"{f}.npy") for f in sorted(filenames)]
+    filenames = np.array(filenames)[indices]
 
     concepts = []
-    for filename in filenames:
-            concept = torch.from_numpy(np.load(filename)).to(device)
-            concepts.append(concept)
+    indices_new = []
+    for filename, idx in zip(filenames, indices):
+        concept = np.load(filename)
+        if np.sum(np.isnan(concept)) > 0:
+            continue
+        concept = torch.from_numpy(concept).to(device)
+        concepts.append(concept)
+        indices_new.append(idx)
 
     concepts = torch.nn.functional.normalize(torch.stack(concepts).squeeze(), dim=1)
     concepts = torch.nn.functional.normalize(concepts-torch.mean(concepts, dim=0), dim=1)
@@ -78,7 +85,7 @@ def load(
         **kwargs
     )
 
-    return splice
+    return splice, indices_new
 
 def decompose_vector(vector, splicemodel, device):
 
