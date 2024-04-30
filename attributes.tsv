@@ -1,4 +1,4 @@
-type	description	description1	description2
+type	description	text1	text2
 light	light / dark	light, illuminated, bright, luminous, well-lit	dark, dull, obscure, dim, darkened, somber, shadowy
 light	warm color / cold color	warm color, yellow, orange, red	cold color, green, blue, purple
 light	colorful / colorless	colorful, chromatic, hued, multicolored, vibrant, vivid 	colorless, dull, pale, plain, simple, uncolored
@@ -25,7 +25,7 @@ context/time	traditional / modern	traditional, classic, conventional, historic, 
 context/time	public / private	public, communal, mutual, national, popular, social, urban, city, open	private, intimate, personal, confidential, exclusive, individual
 nature	old age / young age	old, adult, mature, grown-up, aged, elderly, veteran	young, youthful, adolescent, infant, junior, juvenile, newborn, tender, new
 nature	static / moving	static, motionless, fixed, immobile, immovable, stagnant, stationary, stable, still, inert	mobile, dynamic, moving, active, advancing, jumping, running, walking 
-nature	animate/ inanimate	alive, animate, conscious, live, vital, organic	inanimate, dead, lifeless, inorganic
+nature	animate / inanimate	alive, animate, conscious, live, vital, organic	inanimate, dead, lifeless, inorganic
 nature	male / female	male, masculine, manly, paternal, boy, father, brother, gentleman, son	female, feminine, womanly, maternal, girl, mother, sister, lady, daughter 
 nature	skinny / fat	skinny, bony, scrawny, slender, lean, underweight, skeletal	fat, chubby, overweight
 nature	wild / domestic	wild, free, natural, untamed, ferocious, savage, uncivilized	civilized, domesticated, gentle, orderly, tame, mild, behaved, calm, controllable, docile
