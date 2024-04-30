@@ -1,0 +1,16 @@
+description,weight
+big / small,0.09982562810182571
+natural / artificial,0.08355864137411118
+indoor / outdoor,0.07848715037107468
+matte / glossy,0.06851799041032791
+public / private,0.06479423493146896
+homogeneous / heterogeneous,0.056226857006549835
+hot / cold,0.050740018486976624
+opaque / transparent,0.049686893820762634
+healthy / unhealthy,0.04675452411174774
+long / short,0.043516989797353745
+warm color / cold color,0.030374132096767426
+concentrated / dispersed,0.013733009807765484
+smooth / rough,0.01293244305998087
+ripe / fresh,0.012779075652360916
+static / moving,0.006488610990345478

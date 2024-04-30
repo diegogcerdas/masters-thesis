@@ -3,6 +3,7 @@ import os
 import numpy as np
 import torch.nn as nn
 from sklearn import linear_model
+from sklearn.metrics.pairwise import pairwise_distances
 
 class SPLICE(nn.Module):
     """Decomposes images into a sparse nonnegative linear combination of concept embeddings
@@ -33,10 +34,12 @@ class SPLICE(nn.Module):
         self.device = device
         self.dictionary = dictionary.to(self.device)
         self.l1_penalty = l1_penalty
-        self.l1_penalty = l1_penalty/(2*1024)  # skl regularization is off by a factor of 2 times the dimensionality of the CLIP embedding. See SKL docs.
+        # self.l1_penalty = l1_penalty/(2*1024)  # skl regularization is off by a factor of 2 times the dimensionality of the CLIP embedding. See SKL docs.
 
     def decompose(self, embedding):
-        clf = linear_model.Lasso(alpha=self.l1_penalty, fit_intercept=False, positive=True, max_iter=10000, tol=1e-6)
+        # clf = linear_model.Lasso(alpha=self.l1_penalty, fit_intercept=False, positive=True, max_iter=10000, tol=1e-6)
+        # clf = linear_model.LinearRegression(fit_intercept=False)
+        clf = linear_model.Lars(fit_intercept=False)
         skl_weights = []
         for i in range(embedding.shape[0]):
             clf.fit(self.dictionary.T.cpu().numpy(), embedding[i,:].cpu().numpy())
@@ -56,24 +59,24 @@ class SPLICE(nn.Module):
 
 def load(
     concepts_dir: str,
-    indices: list[int],
     device = "cuda" if torch.cuda.is_available() else "cpu", 
     **kwargs
 ):
 
-    filenames = [int(f.replace(".npy", "")) for f in os.listdir(concepts_dir) if f.endswith(".npy")]
-    filenames = [os.path.join(concepts_dir, f"{f}.npy") for f in sorted(filenames)]
-    filenames = np.array(filenames)[indices]
+    filenames = sorted([os.path.join(concepts_dir, f) for f in os.listdir(concepts_dir)])
 
-    concepts = []
-    indices_new = []
-    for filename, idx in zip(filenames, indices):
-        concept = np.load(filename)
-        if np.sum(np.isnan(concept)) > 0:
-            continue
-        concept = torch.from_numpy(concept).to(device)
-        concepts.append(concept)
-        indices_new.append(idx)
+    concepts1 = []
+    concepts2 = []
+    for i in range(len(filenames)//2):
+        end1 = np.load(filenames[2*i])
+        end2 = np.load(filenames[(2*i)+1])
+        concept1 = torch.from_numpy(end2 - end1).to(device)
+        concept2 = torch.from_numpy(end1 - end2).to(device)
+        concept1 = torch.nn.functional.normalize(concept1, dim=0)
+        concept2 = torch.nn.functional.normalize(concept2, dim=0)
+        concepts1.append(concept1)
+        concepts2.append(concept2)
+    concepts = concepts1 #+ concepts2
 
     concepts = torch.nn.functional.normalize(torch.stack(concepts).squeeze(), dim=1)
     concepts = torch.nn.functional.normalize(concepts-torch.mean(concepts, dim=0), dim=1)
@@ -85,7 +88,7 @@ def load(
         **kwargs
     )
 
-    return splice, indices_new
+    return splice
 
 def decompose_vector(vector, splicemodel, device):
 

@@ -4,23 +4,22 @@ import numpy as np
 import pandas as pd
 
 # parameters
-PC = 0
-
-l1_penalty = 0.1
-concepts_dir = './word_pairs_vectors'
-concepts = 'word_pairs_wordnet.csv'
+l1_penalty = 0.0
+concepts_dir = './attribute_vectors'
+concepts = 'attributes.tsv'
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
-vector = torch.from_numpy(np.load(f'pc_vectors/{PC}.npy')).float().to(device).reshape(1,-1)
-indices = [i for i, (_, _, pos) in enumerate(pd.read_csv(concepts).values) if pos in ['a', 's', 'r', 'v']]
+vector = torch.from_numpy(np.load(f'ppa_vector.npy')).float().to(device).reshape(1,-1)
 
-splicemodel, indices = splice.load(concepts_dir, indices, device, l1_penalty=l1_penalty)
+splicemodel = splice.load(concepts_dir, device, l1_penalty=l1_penalty)
 weights, l0_norm, cosine = splice.decompose_vector(vector, splicemodel, device)
 
-vocab = [f'{word1}_{word2}' for word1, word2, _ in pd.read_csv(concepts).values[indices]]
+vocab = [desc for desc in pd.read_csv(concepts, sep='\t')['description']] #+ [f'{desc}_inv' for desc in pd.read_csv(concepts, sep='\t')['description']]
 
 _, indices = torch.sort(weights, descending=True)
+
+sum = 0
 
 data = []
 for idx in indices.squeeze():
@@ -29,8 +28,9 @@ for idx in indices.squeeze():
         break
     print("\t" + str(vocab[idx.item()]) + "\t" + str(round(weight, 4)) + "\n")
     data.append((str(vocab[idx.item()]), weight))
+    sum += weight
 
-df = pd.DataFrame(data, columns=['pair', 'weight'])
-df.to_csv(f'pc{PC}.csv', index=False)
+df = pd.DataFrame(data, columns=['description', 'weight'])
+df.to_csv(f'ppa.csv', index=False)
 
-print(l0_norm, cosine)
+print(l0_norm, cosine, sum)
