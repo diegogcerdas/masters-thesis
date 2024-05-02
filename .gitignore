@@ -13,5 +13,5 @@ lightning_logs/
 subsets/
 attribute_vectors/
 category_vectors/
-pc_vectors/
+direction_vectors/
 source_images/

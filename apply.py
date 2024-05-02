@@ -1,183 +1,113 @@
-from diffusers import StableUnCLIPImg2ImgPipeline, StableDiffusionPipeline, DDIMInverseScheduler
+from diffusers import StableUnCLIPImg2ImgPipeline
 import torch
 from PIL import Image
 import numpy as np
 import torch
-from datasets.nsd import NaturalScenesDataset
-from datasets.nsd_features import NSDFeaturesDataset
 import numpy as np
 from PIL import Image
-from sklearn.linear_model import LinearRegression
-from methods.feature_extractor import create_feature_extractor
-from torchvision import transforms
 from utils.img_utils import save_images
+import argparse
+from methods.synthesis import ddim_inversion
+from methods.brain_encoder import get_encoder
 
-device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+def main(args):
 
-subject = 1
-data_root = './data'
-seed = 0
-
-hemisphere = 'right'
-rois = [
-    'PPA',
-    'OPA',
-    'RSC',
-    'OFA',
-    'EBA',
-    'OWFA',
-]
-subsets = [
-    'animal_not_bird_cat_dog_person_vehicle',
-    'cat+dog_not_person',
-    'food_not_animal_person',
-    'person_sports_not_animal_food_vehicle',
-    'vehicle_not_animal_person',
-]
-
-img_f = 'burger.png'
-output_dir = './outputs/burger'
-mults = range(-15, 16)
-prompt = 'a photo of a burger'
-
-@torch.no_grad()
-def ddim_inversion(
-    image: Image.Image,
-    num_inference_steps: int,
-    prompt: str,
-    guidance_scale: float,
-    seed: int,
-    device: str,
-):
-    pipeline = StableDiffusionPipeline.from_pretrained("stabilityai/stable-diffusion-2-1").to(device)
-    generator = torch.Generator(device=device).manual_seed(seed)
-
-    # 1. Define call parameters
-    do_classifier_free_guidance = guidance_scale > 1.0
-    inverse_scheduler = DDIMInverseScheduler.from_config(pipeline.scheduler.config)
-
-    # 2. Preprocess image
-    image = pipeline.image_processor.preprocess(image)
-
-    def prepare_image_latents(pipeline, image, dtype, device, generator=None):
-        image = image.to(device=device, dtype=dtype)
-        latents = pipeline.vae.encode(image).latent_dist.sample(generator)
-        latents = pipeline.vae.config.scaling_factor * latents
-        latents = torch.cat([latents], dim=0)
-        return latents
-
-    # 3. Prepare latent variables
-    latents = prepare_image_latents(pipeline, image, pipeline.vae.dtype, device, generator)
-
-    # 4. Encode input prompt
-    num_images_per_prompt = 1
-    prompt_embeds, _ = pipeline.encode_prompt(
-        prompt,
-        device,
-        num_images_per_prompt,
-        do_classifier_free_guidance,
-    )
-
-    # 6. Prepare timesteps
-    inverse_scheduler.set_timesteps(num_inference_steps, device=device)
-    timesteps = inverse_scheduler.timesteps
-
-    # 7. Denoising loop
-    for t in timesteps:
-
-        # expand the latents if we are doing classifier free guidance
-        latent_model_input = torch.cat([latents] * 2) if do_classifier_free_guidance else latents
-        latent_model_input = inverse_scheduler.scale_model_input(latent_model_input, t)
-
-        # predict the noise residual
-        noise_pred = pipeline.unet(latent_model_input, t, encoder_hidden_states=prompt_embeds).sample
-
-        # perform guidance
-        if do_classifier_free_guidance:
-            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-
-        # compute the previous noisy sample x_t -> x_t-1
-        latents = inverse_scheduler.step(noise_pred, t, latents).prev_sample
-
-    inverted_latents = latents.detach().clone()
-
-    return inverted_latents, prompt_embeds
-
-def get_encoder(roi):
-    nsd = NaturalScenesDataset(
-        root=data_root,
-        subject=subject,
-        partition="train",
-        hemisphere=hemisphere,
-        roi=roi,
-    )
+    # Since we use stabilityai/stable-diffusion-2-1-unclip, we fix the clip model to ViT-H-14 (laion2b_s32b_b79k)
+    pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1-unclip"
+    ddim_pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1"
+    resolution = (768,768)
     feature_extractor_type = "clip_2_0"
     metric = 'cosine'
-    n_neighbors = 0
-    dataset = NSDFeaturesDataset(
-        nsd=nsd,
-        feature_extractor_type=feature_extractor_type,
-        predict_average=True,
-        metric=metric,
-        n_neighbors=n_neighbors,
-        seed=seed,
-        device=device,
-        keep_features=True,
+
+    # Load unCLIP pipeline
+    pipe = StableUnCLIPImg2ImgPipeline.from_pretrained(pretrained_model_name_or_path).to(args.device)
+    dtype = next(pipe.image_encoder.parameters()).dtype
+    pipe.safety_checker = None  
+
+    # Load source image and perform DDIM inversion
+    source_img = Image.open(args.img_filename).convert('RGB').resize(resolution)
+    inverted_latents, _ = ddim_inversion(
+        pretrained_model_name_or_path=ddim_pretrained_model_name_or_path,
+        image=source_img,
+        num_inference_steps=args.ddim_inversion_num_steps,
+        prompt=args.prompt,
+        guidance_scale=1,
+        seed=args.seed,
+        device=args.device,
     )
-    encoder = LinearRegression().fit(dataset.features, dataset.targets)
-    return encoder
 
-pipe = StableUnCLIPImg2ImgPipeline.from_pretrained("stabilityai/stable-diffusion-2-1-unclip").to(device)
-dtype = next(pipe.image_encoder.parameters()).dtype
+    # Get CLIP vision embeddings
+    source_img = pipe.feature_extractor(images=source_img, return_tensors="pt").pixel_values.to(device=args.device, dtype=dtype)
+    source_img_embeds = pipe.image_encoder(source_img).image_embeds
 
-img_test = Image.open(img_f).convert('RGB').resize((768,768))
+    # Get brain encoder
+    encoder = get_encoder(args.data_root, args.subject, args.roi, args.hemisphere, feature_extractor_type, metric, args.seed, args.device)
 
-inverted_latents, _ = ddim_inversion(
-    image=img_test,
-    num_inference_steps=50,
-    prompt=prompt,
-    guidance_scale=1,
-    seed=seed,
-    device=device,
-)
+    # Load direction vector
+    direction_vector_filename = f'./direction_vectors/{args.direction_vector_name}.npy'
+    direction_vector = torch.from_numpy(np.load(direction_vector_filename)).to(args.device, dtype=dtype)
+    mults = np.linspace(args.low_multiplier, args.high_multiplier, args.num_frames)
 
-# Get CLIP vision embeddings
-img_test = pipe.feature_extractor(images=img_test, return_tensors="pt").pixel_values
-img_test = img_test.to(device=device, dtype=dtype)
-img_test_embeds = pipe.image_encoder(img_test).image_embeds
+    images = []
+    acts = []
+    for mult in mults:
 
-feature_extractor = create_feature_extractor("clip_2_0", device)
+        # Modify image embeddings
+        emb = source_img_embeds + mult * direction_vector
 
-for roi in rois:
+        # Generate image
+        img = pipe(
+            latents=inverted_latents,
+            prompt=args.prompt,
+            generator=torch.Generator(device=args.device).manual_seed(args.seed),
+            image_embeds=emb,
+            noise_level=args.unclip_noise_level,
+        ).images[0]
+        images.append(img)
+
+        # Predict brain activation
+        acts.append(encoder(img))
+
+    acts = np.array(acts)
+
+    save_dir = f'{args.output_dir}/{args.subject}_{args.roi}_{args.hemisphere}/{args.direction_vector_name}/{args.seed}'
+    save_images(images, save_dir, mults)
+    np.save(f'{save_dir}/acts.npy', acts)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    # Model and Data Parameters
+    parser.add_argument("--data_root", type=str, default="./data/")
+    parser.add_argument("--subject", type=int, default=1)
+    parser.add_argument("--roi", default="PPA")
+    parser.add_argument("--hemisphere", type=str, default="right")
+
+    parser.add_argument("--img_filename", type=str, default='./source_images/person.png')
+    parser.add_argument("--output_dir", type=str, default='./outputs/person')
+    parser.add_argument("--prompt", type=str, default='a photo of a person')
+
+    parser.add_argument("--direction_vector_name", type=str, default='1_PPA_right')
+    parser.add_argument("--low_multiplier", type=float, default=0)
+    parser.add_argument("--high_multiplier", type=float, default=20)
+    parser.add_argument("--num_frames", type=int, default=100)
+    parser.add_argument("--unclip_noise_level", type=float, default=0)
+    parser.add_argument("--ddim_inversion_num_steps", type=int, default=50)
     
-    encoder = get_encoder(roi)
-    
-    for subset in subsets:
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=(
+            torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+        ),
+    )
 
-        vector_f = f'./subsets/{subject}_{roi}_{hemisphere}/{subset}/shift_vector.npy'
-        shift_vector = torch.from_numpy(np.load(vector_f)).to(device, dtype=dtype)
+    # WandB Parameters
+    parser.add_argument("--wandb-project", type=str, default="masters-thesis")
+    parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
+    parser.add_argument("--wandb-mode", type=str, default="online")
 
-        images = []
-        acts = []
-        for i, mult in enumerate(mults):
-            generator = torch.Generator(device=device).manual_seed(seed)
-            emb = img_test_embeds + mult * shift_vector
-            img = pipe(
-                latents=inverted_latents,
-                prompt=prompt,
-                generator=generator,
-                image_embeds=emb,
-                noise_level=0
-            ).images[0]
-            images.append(img)
-
-            feats = feature_extractor(transforms.ToTensor()(img).unsqueeze(0)).detach().cpu().numpy()
-            pred = encoder.predict(feats)
-            acts.append(pred)
-
-        acts = np.array(acts)
-
-        save_dir = f'{output_dir}/{subject}_{roi}_{hemisphere}/{subset}'
-        save_images(images, save_dir)
-        np.save(f'{save_dir}/acts.npy', acts)
+    # Parse arguments
+    args = parser.parse_args()
+    main(args)
