@@ -15,7 +15,7 @@ class Encoder:
         pred = self.linear_model.predict(feats)
         return pred
 
-def get_encoder(data_root, subject, roi, hemisphere, feature_extractor_type, metric, seed, device):
+def get_encoder(data_root, subject, roi, hemisphere, feature_extractor_type, metric, predict_average, seed, device):
     nsd = NaturalScenesDataset(
         root=data_root,
         subject=subject,
@@ -26,7 +26,7 @@ def get_encoder(data_root, subject, roi, hemisphere, feature_extractor_type, met
     dataset = NSDFeaturesDataset(
         nsd=nsd,
         feature_extractor_type=feature_extractor_type,
-        predict_average=True,
+        predict_average=predict_average,
         metric=metric,
         n_neighbors=0,
         seed=seed,

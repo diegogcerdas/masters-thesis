@@ -14,8 +14,6 @@ def main(args):
 
     # Since we use stabilityai/stable-diffusion-2-1-unclip, we fix the clip model to ViT-H-14 (laion2b_s32b_b79k)
     pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1-unclip"
-    ddim_pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1"
-    resolution = (768,768)
     feature_extractor_type = "clip_2_0"
     metric = 'cosine'
 
@@ -24,55 +22,41 @@ def main(args):
     dtype = next(pipe.image_encoder.parameters()).dtype
     pipe.safety_checker = None  
 
-    # Load source image and perform DDIM inversion
-    source_img = Image.open(args.img_filename).convert('RGB').resize(resolution)
-    inverted_latents, _ = ddim_inversion(
-        pretrained_model_name_or_path=ddim_pretrained_model_name_or_path,
-        image=source_img,
-        num_inference_steps=args.ddim_inversion_num_steps,
-        prompt=args.prompt,
-        guidance_scale=1,
-        seed=args.seed,
-        device=args.device,
-    )
-
     # Get CLIP vision embeddings
     source_img = pipe.feature_extractor(images=source_img, return_tensors="pt").pixel_values.to(device=args.device, dtype=dtype)
     source_img_embeds = pipe.image_encoder(source_img).image_embeds
 
     # Get brain encoder
-    encoder = get_encoder(args.data_root, args.subject, args.roi, args.hemisphere, feature_extractor_type, metric, True, args.seed, args.device)
+    encoder = get_encoder(args.data_root, args.subject, args.roi, args.hemisphere, feature_extractor_type, metric, False, args.seed, args.device)
 
     # Load direction vector
     direction_vector_filename = f'./direction_vectors/{args.direction_vector_name}.npy'
     direction_vector = torch.from_numpy(np.load(direction_vector_filename)).to(args.device, dtype=dtype)
     mults = np.linspace(args.low_multiplier, args.high_multiplier, args.num_frames)
 
-    images = []
-    acts = []
-    for mult in mults:
+    for seed in np.random.randint(0,1000,args.num_variations):
 
-        # Modify image embeddings
-        emb = source_img_embeds + mult * direction_vector
+        acts = []
+        for mult in mults:
 
-        # Generate image
-        img = pipe(
-            latents=inverted_latents,
-            prompt=args.prompt,
-            generator=torch.Generator(device=args.device).manual_seed(args.seed),
-            image_embeds=emb,
-            noise_level=args.unclip_noise_level,
-        ).images[0]
-        images.append(img)
+            # Modify image embeddings
+            emb = source_img_embeds + mult * direction_vector
 
-        # Predict brain activation
-        acts.append(encoder(img))
+            # Generate image
+            img = pipe(
+                prompt=args.prompt,
+                generator=torch.Generator(device=args.device).manual_seed(seed),
+                image_embeds=emb,
+                noise_level=args.unclip_noise_level,
+            ).images[0]
 
-    acts = np.array(acts)
+            # Predict brain activation
+            acts.append(encoder(img))
 
-    save_dir = f'{args.output_dir}/{args.subject}_{args.roi}_{args.hemisphere}/{args.direction_vector_name}/{args.seed}'
-    save_images(images, save_dir, mults)
-    np.save(f'{save_dir}/acts.npy', acts)
+        acts = np.array(acts)
+
+        save_dir = f'{args.output_dir}/{args.subject}_{args.roi}_{args.hemisphere}/{args.direction_vector_name}/exp'
+        np.save(f'{save_dir}/{seed}_acts.npy', acts)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -86,11 +70,12 @@ if __name__ == "__main__":
     parser.add_argument("--img_filename", type=str, default='./source_images/person.png')
     parser.add_argument("--output_dir", type=str, default='./outputs/person')
     parser.add_argument("--prompt", type=str, default='a photo of a person')
+    parser.add_argument("--num_variations", type=int, default=100)
 
-    parser.add_argument("--direction_vector_name", type=str, default='1_PPA_right')
-    parser.add_argument("--low_multiplier", type=float, default=0)
+    parser.add_argument("--direction_vector_name", type=str, default='1_lightness')
+    parser.add_argument("--low_multiplier", type=float, default=-20)
     parser.add_argument("--high_multiplier", type=float, default=20)
-    parser.add_argument("--num_frames", type=int, default=100)
+    parser.add_argument("--num_frames", type=int, default=50)
     parser.add_argument("--unclip_noise_level", type=float, default=0)
     parser.add_argument("--ddim_inversion_num_steps", type=int, default=50)
     
