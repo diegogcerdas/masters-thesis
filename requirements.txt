@@ -12,3 +12,6 @@ diffusers==0.26.3
 wandb
 peft
 lpips
+
+
+ipykernel
