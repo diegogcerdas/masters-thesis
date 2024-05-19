@@ -33,9 +33,9 @@ from diffusers import (
     StableDiffusionXLAdapterPipeline
 )
 
-from dhf.aggregation_network import AggregationNetwork
-from dhf.stable_diffusion.resnet import collect_feats
-from readout_guidance import rg_operators, rg_pipeline, rg_helpers
+from methods.low_level_attributes.readout_guidance.dhf.aggregation_network import AggregationNetwork
+from methods.low_level_attributes.readout_guidance.dhf.stable_diffusion.resnet import collect_feats
+from methods.low_level_attributes.readout_guidance.readout_guidance import rg_operators, rg_pipeline, rg_helpers
 
 # ====================
 #   Load Components

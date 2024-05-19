@@ -1,5 +1,4 @@
 data/
-data_old/
 logs/
 __pycache__/
 wandb/

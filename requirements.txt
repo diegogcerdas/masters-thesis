@@ -15,3 +15,8 @@ lpips
 
 
 ipykernel
+ipykernel
+visualpriors
+scikit-image
+pycocotools
+timm==0.6.7

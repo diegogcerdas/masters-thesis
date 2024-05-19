@@ -7,6 +7,7 @@ from typing import List
 from PIL import Image
 from skimage.util import view_as_blocks
 from tqdm import tqdm
+from torchvision import transforms
 from methods.low_level_attributes.image_measures import compute_warmth, compute_saturation, compute_brightness, compute_entropy
 
 
@@ -18,6 +19,7 @@ class NSDMeasuresDataset(data.Dataset):
         patches_shape: tuple,
         img_shape: tuple,
         predict_average: bool,
+        return_images: bool = False,
     ):
         super().__init__()
         assert nsd.return_activations
@@ -28,6 +30,7 @@ class NSDMeasuresDataset(data.Dataset):
         self.img_shape = img_shape
         self.patch_size = (img_shape[0]//patches_shape[0], img_shape[1]//patches_shape[1])
         self.predict_average = predict_average
+        self.return_images = return_images
         self.targets = self.compute_targets()
         self.averages = self.compute_averages()
         self.stdevs = self.compute_stdevs()
@@ -51,8 +54,12 @@ class NSDMeasuresDataset(data.Dataset):
         measures = measures.numpy()
         # Extract patches
         patches = view_as_blocks(measures, (measures.shape[0], self.patch_size[0], self.patch_size[1]))
-        patches = torch.tensor(patches).float().mean(dim=(-1,-2))
+        patches = torch.tensor(patches).float().mean(dim=(-1,-2)).squeeze(0).permute(2, 0, 1)
         target = self.targets[idx]
+        if self.return_images:
+            img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
+            img = transforms.ToTensor()(img).float()
+            return patches, target, img
         return patches, target
     
     def compute_measure(self, idx, measure, normalize=True):

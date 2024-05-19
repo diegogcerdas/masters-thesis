@@ -26,8 +26,8 @@ from tqdm import tqdm
 from diffusers import DDIMScheduler
 from diffusers.pipelines.t2i_adapter.pipeline_stable_diffusion_xl_adapter import _preprocess_adapter_image
 
-from dhf.stable_diffusion.resnet import init_resnet_func, collect_feats, collect_channels
-from readout_guidance import rg_operators, rg_helpers
+from methods.low_level_attributes.readout_guidance.dhf.stable_diffusion.resnet import init_resnet_func, collect_feats, collect_channels
+from methods.low_level_attributes.readout_guidance.readout_guidance import rg_operators, rg_helpers
 
 class ReadoutGuidance():
     def __init__(

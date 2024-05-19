@@ -3,7 +3,7 @@ import open_clip
 import torch
 import torch.nn as nn
 from tqdm import tqdm
-from datasets import NaturalScenesDataset
+from datasets.nsd.nsd import NaturalScenesDataset
 
 
 class CLIPExtractorType:
