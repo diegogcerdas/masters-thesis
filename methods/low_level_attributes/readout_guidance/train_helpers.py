@@ -36,7 +36,7 @@ def get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=Fal
     return diffusion_hyperfeats
 
 def prepare_batch(batch, config):
-    target, _, imgs = batch
+    target, imgs = batch
     imgs, target = imgs.to(config["device"]), target.to(config["device"])
     imgs, target = resize_tensors(imgs, target, config["load_resolution"])
     imgs = renormalize(imgs, (0,1), (-1,1))
@@ -60,9 +60,11 @@ def log_grid(imgs, target, pred):
     grid.append(imgs)
     target = target.detach().cpu()
     target = renormalize(target, (target.min(), target.max()), (0, 1))
+    target = target.repeat(1, 3, 1, 1) # TODO: fix this
     grid.append(target)
     pred = pred.detach().cpu()
     pred = renormalize(pred, (pred.min(), pred.max()), (0, 1))
+    pred = pred.repeat(1, 3, 1, 1)
     grid.append(pred)
     grid = torch.cat(grid, dim=0)
     # Clamp to prevent overflow / underflow

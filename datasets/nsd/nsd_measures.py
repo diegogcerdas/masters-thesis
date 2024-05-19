@@ -22,7 +22,6 @@ class NSDMeasuresDataset(data.Dataset):
         return_images: bool = False,
     ):
         super().__init__()
-        assert nsd.return_activations
         assert all([m in ["depth", "surface_normal", "gaussian_curvature", "warmth", "saturation", "brightness", "entropy"] for m in measures])
         assert (img_shape[0] % patches_shape[0] == 0) and (img_shape[1] % patches_shape[1] == 0)
         self.nsd = nsd
@@ -31,9 +30,10 @@ class NSDMeasuresDataset(data.Dataset):
         self.patch_size = (img_shape[0]//patches_shape[0], img_shape[1]//patches_shape[1])
         self.predict_average = predict_average
         self.return_images = return_images
-        self.targets = self.compute_targets()
         self.averages = self.compute_averages()
         self.stdevs = self.compute_stdevs()
+        if nsd.return_activations:
+            self.targets = self.compute_targets()
 
     def __len__(self):
         return len(self.nsd)
@@ -55,12 +55,19 @@ class NSDMeasuresDataset(data.Dataset):
         # Extract patches
         patches = view_as_blocks(measures, (measures.shape[0], self.patch_size[0], self.patch_size[1]))
         patches = torch.tensor(patches).float().mean(dim=(-1,-2)).squeeze(0).permute(2, 0, 1)
-        target = self.targets[idx]
+        
         if self.return_images:
             img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
             img = transforms.ToTensor()(img).float()
-            return patches, target, img
-        return patches, target
+            if self.nsd.return_activations:
+                target = self.targets[idx]
+                return patches, target, img
+            else: 
+                return patches, img
+        if self.nsd.return_activations:
+            target = self.targets[idx]
+            return patches, target
+        return patches
     
     def compute_measure(self, idx, measure, normalize=True):
         f = os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"])

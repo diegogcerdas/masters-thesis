@@ -104,14 +104,12 @@ def main(config):
     os.makedirs(config["results_folder"], exist_ok=True)
 
     train(
+        config,
         diffusion_extractor, 
         aggregation_network, 
         optimizer, 
         train_dataloader, 
         val_dataloader,
-        config['num_epochs'],
-        config['validation_epochs'],
-        config['device'],
     )
 
 if __name__ == "__main__":
