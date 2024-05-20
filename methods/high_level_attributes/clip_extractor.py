@@ -38,10 +38,10 @@ class CLIPExtractor(nn.Module):
     def forward(self, data: torch.Tensor, mode: str = "val"):
         if mode == "val":
             with torch.no_grad():
-                x = self.transform(data).to(self.device)
+                x = self.transform(data).to(self.device).unsqueeze(0)
                 x = self.clip.encode_image(x).reshape(x.shape[0], -1).float()
         elif mode == "train":
-            x = self.transform(data).to(self.device)
+            x = self.transform(data).to(self.device).unsqueeze(0)
             x = self.clip.encode_image(x).reshape(x.shape[0], -1).float()
         x = (x - self.mean) / self.std
         return x

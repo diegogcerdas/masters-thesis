@@ -17,14 +17,14 @@ class NSDCLIPFeaturesDataset(data.Dataset):
         predict_average: bool,
     ):
         super().__init__()
-        assert nsd.return_activations
         self.nsd = nsd
         self.clip_extractor_type = clip_extractor_type
         self.predict_average = predict_average
         self.features = self.load_features()
         self.D = self.load_distance_matrix()
-        self.targets = self.compute_targets()
-        self.target_size = 1 if predict_average else len(nsd.roi_indices)
+        if nsd.return_activations:
+            self.targets = self.compute_targets()
+            self.target_size = 1 if predict_average else len(nsd.roi_indices)
 
     def __len__(self):
         return len(self.nsd)
@@ -32,8 +32,11 @@ class NSDCLIPFeaturesDataset(data.Dataset):
     def __getitem__(self, idx):
         img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
         img = transforms.ToTensor()(img).float()
-        target = self.targets[idx]
-        return img, target
+        features = self.features[idx]
+        if self.nsd.return_activations:
+            target = self.targets[idx]
+            return img, features, target
+        return img, features
 
     def load_features(self):
         folder = os.path.join(self.nsd.root, f"subj{self.nsd.subject:02d}", "training_split", "features")

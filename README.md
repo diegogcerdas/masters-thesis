@@ -13,5 +13,6 @@ Download xtc checkpoints
 
 1. Download zip files and `nsd_stim_info_merged.csv`
 2. Extract in `data/NSD/`
+3. Download averages and stdevs
 3. Run `setup.py`
 

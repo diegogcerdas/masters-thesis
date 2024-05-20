@@ -19,7 +19,6 @@ class NSDMeasuresDataset(data.Dataset):
         patches_shape: tuple,
         img_shape: tuple,
         predict_average: bool,
-        return_images: bool = False,
     ):
         super().__init__()
         assert all([m in ["depth", "surface_normal", "gaussian_curvature", "warmth", "saturation", "brightness", "entropy"] for m in measures])
@@ -29,7 +28,6 @@ class NSDMeasuresDataset(data.Dataset):
         self.img_shape = img_shape
         self.patch_size = (img_shape[0]//patches_shape[0], img_shape[1]//patches_shape[1])
         self.predict_average = predict_average
-        self.return_images = return_images
         self.averages = self.compute_averages()
         self.stdevs = self.compute_stdevs()
         if nsd.return_activations:
@@ -39,6 +37,8 @@ class NSDMeasuresDataset(data.Dataset):
         return len(self.nsd)
 
     def __getitem__(self, idx):
+        img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
+        img = transforms.ToTensor()(img).float()
         measures = []
         for m in self.measures:
             measures.append(self.compute_measure(idx, m))
@@ -56,18 +56,11 @@ class NSDMeasuresDataset(data.Dataset):
         patches = view_as_blocks(measures, (measures.shape[0], self.patch_size[0], self.patch_size[1]))
         patches = torch.tensor(patches).float().mean(dim=(-1,-2)).squeeze(0).permute(2, 0, 1)
         
-        if self.return_images:
-            img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
-            img = transforms.ToTensor()(img).float()
-            if self.nsd.return_activations:
-                target = self.targets[idx]
-                return patches, target, img
-            else: 
-                return patches, img
         if self.nsd.return_activations:
             target = self.targets[idx]
-            return patches, target
-        return patches
+            return img, patches, target
+        else: 
+            return img, patches
     
     def compute_measure(self, idx, measure, normalize=True):
         f = os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"])

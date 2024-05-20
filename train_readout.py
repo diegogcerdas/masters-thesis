@@ -67,7 +67,6 @@ def main(config):
         patches_shape=config['patches_shape'],
         img_shape=config['img_shape'],
         predict_average=True,
-        return_images=True,
     )
     train_dataloader = data.DataLoader(
         train_set,
@@ -90,7 +89,6 @@ def main(config):
         patches_shape=config['patches_shape'],
         img_shape=config['img_shape'],
         predict_average=True,
-        return_images=True,
     )
     val_dataloader = data.DataLoader(
         val_set,

@@ -3,6 +3,8 @@ import torch.nn.functional as F
 import torchvision
 from PIL import Image
 import numpy as np
+import io
+import matplotlib.pyplot as plt
 from methods.low_level_attributes.readout_guidance.dhf.diffusion_extractor import DiffusionExtractor
 from methods.low_level_attributes.readout_guidance.dhf.aggregation_network import AggregationNetwork
     
@@ -36,15 +38,15 @@ def get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=Fal
     return diffusion_hyperfeats
 
 def prepare_batch(batch, config):
-    target, imgs = batch
+    imgs, target = batch
     imgs, target = imgs.to(config["device"]), target.to(config["device"])
-    imgs, target = resize_tensors(imgs, target, config["load_resolution"])
+    imgs, target = resize_tensors(imgs, target, config)
     imgs = renormalize(imgs, (0,1), (-1,1))
     return imgs, target
 
-def resize_tensors(imgs, target, resolution):
-    imgs = F.interpolate(imgs, resolution)
-    target = F.interpolate(target, resolution)
+def resize_tensors(imgs, target, config):
+    imgs = F.interpolate(imgs, config["load_resolution"])
+    target = F.interpolate(target, config["output_resolution"])
     return imgs, target
 
 def renormalize(x, range_a, range_b):
@@ -54,28 +56,23 @@ def renormalize(x, range_a, range_b):
     return ((x - min_a) / (max_a - min_a)) * (max_b - min_b) + min_b
 
 def log_grid(imgs, target, pred):
-    grid = []
-    imgs = imgs.detach().cpu()
-    imgs = renormalize(imgs, (-1, 1), (0, 1))
-    grid.append(imgs)
-    target = target.detach().cpu()
-    target = renormalize(target, (target.min(), target.max()), (0, 1))
-    target = target.repeat(1, 3, 1, 1) # TODO: fix this
-    grid.append(target)
-    pred = pred.detach().cpu()
-    pred = renormalize(pred, (pred.min(), pred.max()), (0, 1))
-    pred = pred.repeat(1, 3, 1, 1)
-    grid.append(pred)
-    grid = torch.cat(grid, dim=0)
-    # Clamp to prevent overflow / underflow
-    grid = torch.clamp(grid, 0, 1)
-    grid = make_grid(grid, imgs.shape[0])
-    return grid
-
-def make_grid(images, nrow):
-    grid = torchvision.utils.make_grid(images, nrow=nrow)
-    grid = grid.transpose(0, 1).transpose(1, 2).squeeze(-1)
-    grid = grid.numpy()
-    grid = (grid * 255).astype(np.uint8)
-    grid = Image.fromarray(grid)
-    return grid
+    num_images = min(8, imgs.shape[0])
+    min_val = min(target.min(), pred.min())
+    max_val = max(target.max(), pred.max())
+    fig, axes = plt.subplots(3, num_images, figsize=(num_images*4, 12))
+    for i in range(num_images):
+        img = imgs[i].detach().cpu().permute(1, 2, 0)
+        img = renormalize(img, (-1, 1), (0, 1))
+        axes[0, i].imshow(img)
+        axes[0, i].axis('off')
+        axes[1, i].imshow(target[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val)
+        axes[1, i].axis('off')
+        axes[2, i].imshow(pred[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val)
+        axes[2, i].axis('off')
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf)
+    buf.seek(0)
+    img = Image.open(buf)
+    plt.close(fig)
+    return img

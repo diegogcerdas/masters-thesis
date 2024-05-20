@@ -35,7 +35,7 @@ def save_for_attribute_pairs(
     df = pd.read_csv(attribute_pairs_path, sep='\t')
     os.makedirs(save_dir, exist_ok=True)
 
-    for description, text1, text2 in tqdm(df[['description', 'text1', 'text2']], total=len(df)):
+    for description, text1, text2 in tqdm(df[['description', 'text1', 'text2']].values, total=len(df)):
 
         with torch.no_grad():
             # Encode the text using CLIP
