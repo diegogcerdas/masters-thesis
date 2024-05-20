@@ -14,6 +14,8 @@ download_coco_annotation_file(dataset_root)
 
 for subject in [1,2,3,4,5,6,7,8]:
 
+    print(f"Processing subject {subject}...")
+
     # 1. Create dataset (and save info CSV file)
     nsd = NaturalScenesDataset(dataset_root, subject, "all")
 

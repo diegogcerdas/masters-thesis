@@ -1,9 +1,7 @@
 import torch
 import torch.nn.functional as F
-import torchvision
 from PIL import Image
-import numpy as np
-import io
+import io, os
 import matplotlib.pyplot as plt
 from methods.low_level_attributes.readout_guidance.dhf.diffusion_extractor import DiffusionExtractor
 from methods.low_level_attributes.readout_guidance.dhf.aggregation_network import AggregationNetwork
@@ -16,7 +14,9 @@ def load_models(config):
         feature_dims=diffusion_extractor.dims,
         device=config['device'],
         save_timestep=config["save_timestep"],
-        **config.get("aggregation_kwargs", {})
+        use_output_head=config["use_output_head"],
+        output_head_channels=config["output_head_channels"],
+        bottleneck_sequential=config["bottleneck_sequential"],
     )
     return diffusion_extractor, aggregation_network
 
@@ -56,18 +56,18 @@ def renormalize(x, range_a, range_b):
     return ((x - min_a) / (max_a - min_a)) * (max_b - min_b) + min_b
 
 def log_grid(imgs, target, pred):
-    num_images = min(8, imgs.shape[0])
+    num_images = min(16, imgs.shape[0])
     min_val = min(target.min(), pred.min())
     max_val = max(target.max(), pred.max())
-    fig, axes = plt.subplots(3, num_images, figsize=(num_images*4, 12))
+    fig, axes = plt.subplots(3, num_images, figsize=(num_images*3, 9))
     for i in range(num_images):
-        img = imgs[i].detach().cpu().permute(1, 2, 0)
+        img = F.interpolate(imgs[i].detach().cpu(), 128).permute(1, 2, 0)
         img = renormalize(img, (-1, 1), (0, 1))
         axes[0, i].imshow(img)
         axes[0, i].axis('off')
-        axes[1, i].imshow(target[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val)
+        axes[1, i].imshow(target[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val, cmap='gray')
         axes[1, i].axis('off')
-        axes[2, i].imshow(pred[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val)
+        axes[2, i].imshow(pred[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val, cmap='gray')
         axes[2, i].axis('off')
     plt.tight_layout()
     buf = io.BytesIO()
@@ -76,3 +76,9 @@ def log_grid(imgs, target, pred):
     img = Image.open(buf)
     plt.close(fig)
     return img
+
+def save_model(config, aggregation_network, epoch):
+    ckpt_folder = os.path.join(config['results_folder'], config['exp_name'], 'checkpoints')
+    os.makedirs(ckpt_folder, exist_ok=True)
+    torch.save(aggregation_network.state_dict(), os.path.join(ckpt_folder, f"epoch-{str(epoch).zfill(3)}.pt"))
+    torch.save(aggregation_network.state_dict(), os.path.join(ckpt_folder, f"last.pt"))

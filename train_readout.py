@@ -2,10 +2,13 @@ import torch
 from tqdm import tqdm
 import torch.nn.functional as F
 import os
+import argparse
+import wandb
+from argparse import BooleanOptionalAction
 from torch.utils import data
 from datasets.nsd.nsd import NaturalScenesDataset
 from datasets.nsd.nsd_measures import NSDMeasuresDataset
-from methods.low_level_attributes.readout_guidance.train_helpers import load_models, load_optimizer, get_hyperfeats, prepare_batch, log_grid
+from methods.low_level_attributes.readout_guidance.train_helpers import load_models, load_optimizer, get_hyperfeats, prepare_batch, log_grid, save_model
 
 def train(
     config,
@@ -18,34 +21,43 @@ def train(
 
     aggregation_network = aggregation_network.to(config["device"])
 
+    global_step = 0
     for epoch in range(config["num_epochs"]):
 
         #################### VALIDATION ####################
 
         if epoch % config["validation_epochs"] == 0:
             
+            total_loss = 0
             with torch.no_grad():
 
-                for j, batch in tqdm(enumerate(val_dataloader)):
-
+                for j, batch in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
+                    
                     imgs, target = prepare_batch(batch, config)
                     pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs)
-                    grid = log_grid(imgs, target, pred)
-                    grid.save(os.path.join(config["results_folder"], f"epoch-{epoch}_b-{j}.png"))
+                    total_loss += F.mse_loss(pred, target).item()
 
-                    # TODO: save model
+                    if j <= config["log_max"]:
+                        grid = log_grid(imgs, target, pred)
+                        grid.save(os.path.join(config["results_folder"], config["exp_name"], f"epoch-{epoch}_b-{j}.png"))
+                
+                save_model(config, aggregation_network, epoch)
+            
+            wandb.log({"val/loss": total_loss/len(val_dataloader)}, step=global_step)
 
         ##################### TRAINING #####################
 
-        for batch in tqdm(train_dataloader):
+        for batch in tqdm(train_dataloader, total=len(train_dataloader)):
   
             imgs, target = prepare_batch(batch, config)
             pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs)
             loss = F.mse_loss(pred, target)
+            wandb.log({"train/loss": loss.item()}, step=global_step)
             
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
+            global_step += 1
 
 def main(config):
 
@@ -99,7 +111,15 @@ def main(config):
         pin_memory=True,
     )
 
-    os.makedirs(config["results_folder"], exist_ok=True)
+    config["exp_name"] = f'{config["subject"]}_{config["measures"]}'
+    os.makedirs(os.path.join(config["results_folder"], config["exp_name"]), exist_ok=True)
+
+    wandb.init(
+        name=config["exp_name"],
+        project=config["wandb_project"],
+        entity=config["wandb_entity"],
+        mode=config["wandb_mode"],
+    )
 
     train(
         config,
@@ -111,40 +131,51 @@ def main(config):
     )
 
 if __name__ == "__main__":
-    
-    config = {
-        # General
-        "device": torch.device("cuda" if torch.cuda.is_available() else "cpu"),
-        "seed": 0,
-        "batch_size": 8,
-        "num_workers": 18,
-        "lr": 1e-4,
-        "num_epochs": 15,
-        "validation_epochs": 1,
-        "results_folder": "./data/readout_guidance/results",
 
-        # Diffusion Extractor
-        "model_id": "runwayml/stable-diffusion-v1-5",
-        'num_timesteps': 1000,
-        "save_timestep": [0],
-        "prompt": "",
-        "negative_prompt": "",
-        "diffusion_mode": "generation",
+    parser = argparse.ArgumentParser()
 
-        # Aggregation Network
-        "projection_dim": 384,
-        "aggregation_kwargs": {
-            'use_output_head': True,
-            'output_head_channels': 1,
-            'bottleneck_sequential': False,
-        },
+    # Aggregation Network Parameters
+    parser.add_argument("--projection_dim", type=int, default=384)
+    parser.add_argument("--use_output_head", action=BooleanOptionalAction, default=True)
+    parser.add_argument("--output_head_channels", type=int, default=1)
+    parser.add_argument("--bottleneck_sequential", action=BooleanOptionalAction, default=False)
 
-        # Dataset
-        "dataset_root": "./data/NSD",
-        "subject": 1,
-        "measures": ["warmth"],
-        "patches_shape": (25, 25),
-        "img_shape": (425, 425),
-    }
+    # Diffusion Extractor Parameters
+    parser.add_argument("--model_id", type=str, default="runwayml/stable-diffusion-v1-5")
+    parser.add_argument("--num_timesteps", type=int, default=1000)
+    parser.add_argument("--save_timestep", type=int, nargs="+", default=[0])
+    parser.add_argument("--prompt", type=str, default="")
+    parser.add_argument("--negative_prompt", type=str, default="")
+    parser.add_argument("--diffusion_mode", type=str, default="generation")
 
+    # Dataset Parameters
+    parser.add_argument("--dataset_root", type=str, default="./data/NSD")
+    parser.add_argument("--subject", type=int, default=1)
+    parser.add_argument("--measures", type=str, default="warmth")
+    parser.add_argument("--patches_shape", type=tuple, default=(64, 64))
+    parser.add_argument("--img_shape", type=tuple, default=(448, 448))
+
+    # General Parameters
+    parser.add_argument("--results_folder", type=str, default="./data/readout_guidance/results")
+    parser.add_argument("--validation_epochs", type=int, default=1)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=18)
+    parser.add_argument("--num_epochs", type=int, default=15)
+    parser.add_argument("--log_max", type=int, default=5)
+    parser.add_argument(
+        "--device",
+        type=str,
+        default=(
+            torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+        ),
+    )
+
+    # WandB Parameters
+    parser.add_argument("--wandb-project", type=str, default="masters-thesis")
+    parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
+    parser.add_argument("--wandb-mode", type=str, default="online")
+
+    config = parser.parse_args()
     main(config)

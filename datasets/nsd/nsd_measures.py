@@ -21,10 +21,10 @@ class NSDMeasuresDataset(data.Dataset):
         predict_average: bool,
     ):
         super().__init__()
-        assert all([m in ["depth", "surface_normal", "gaussian_curvature", "warmth", "saturation", "brightness", "entropy"] for m in measures])
+        self.measures = measures if isinstance(measures, list) else [measures]
+        assert all([m in ["depth", "surface_normal", "gaussian_curvature", "warmth", "saturation", "brightness", "entropy"] for m in self.measures])
         assert (img_shape[0] % patches_shape[0] == 0) and (img_shape[1] % patches_shape[1] == 0)
         self.nsd = nsd
-        self.measures = measures
         self.img_shape = img_shape
         self.patch_size = (img_shape[0]//patches_shape[0], img_shape[1]//patches_shape[1])
         self.predict_average = predict_average
