@@ -25,7 +25,7 @@ def load_optimizer(config, aggregation_network):
         {"params": aggregation_network.mixing_weights, "lr": config["lr"]},
         {"params": aggregation_network.bottleneck_layers.parameters(), "lr": config["lr"]},
     ]
-    if config["aggregation_kwargs"].get("use_output_head", False):
+    if config["use_output_head"]:
         parameter_groups.append({"params": aggregation_network.output_head.parameters(), "lr": config["lr"]})
     optimizer = torch.optim.AdamW(parameter_groups)
     return optimizer

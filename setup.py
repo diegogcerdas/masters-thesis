@@ -7,7 +7,8 @@ from methods.high_level_attributes.shift_vectors import save_for_attribute_pairs
 from datasets.nsd.utils.coco_utils import save_segmentation_masks, build_coco_category_search
 from datasets.nsd.utils.nsd_utils import build_roi_inverted_index
 
-dataset_root = "./data/NSD/"
+data_root = "./data/"
+dataset_root = os.path.join(data_root, "NSD")
 
 # 0. Download COCO files
 download_coco_annotation_file(dataset_root)
@@ -42,4 +43,7 @@ for subject in [1,2,3,4,5,6,7,8]:
     _ = NSDMeasuresDataset(nsd, measures, (425, 425), (425, 425), predict_average=True)
 
 # 7. Compute and save high-level attribute pair shift vectors
-save_for_attribute_pairs()
+save_for_attribute_pairs(
+    os.path.join(data_root, "attribute_pairs.tsv"),
+    os.path.join(data_root, "shift_vectors/attribute_pairs")
+)

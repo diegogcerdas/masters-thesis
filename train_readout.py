@@ -66,20 +66,24 @@ def main(config):
     config["load_resolution"] = diffusion_extractor.load_resolution
 
     optimizer = load_optimizer(config, aggregation_network)
-
+    
     # Training set
-    nsd = NaturalScenesDataset(
-        root=config['dataset_root'],
-        subject=config['subject'],
-        partition="train",
-    )
-    train_set = NSDMeasuresDataset(
-        nsd=nsd,
-        measures=config['measures'],
-        patches_shape=config['patches_shape'],
-        img_shape=config['img_shape'],
-        predict_average=True,
-    )
+    training_sets = []
+    for subject in [1,2,3,4,5,6,7,8]:
+        nsd = NaturalScenesDataset(
+            root=config['dataset_root'],
+            subject=subject,
+            partition="train",
+        )
+        nsd_measures = NSDMeasuresDataset(
+            nsd=nsd,
+            measures=config['measures'],
+            patches_shape=config['patches_shape'],
+            img_shape=config['img_shape'],
+            predict_average=True,
+        )
+        training_sets.append(nsd_measures)
+    train_set = data.ConcatDataset(training_sets)
     train_dataloader = data.DataLoader(
         train_set,
         batch_size=config['batch_size'],
@@ -90,18 +94,22 @@ def main(config):
     )
 
     # Validation set
-    nsd = NaturalScenesDataset(
-        root=config['dataset_root'],
-        subject=config['subject'],
-        partition="test",
-    )
-    val_set = NSDMeasuresDataset(
-        nsd=nsd,
-        measures=config['measures'],
-        patches_shape=config['patches_shape'],
-        img_shape=config['img_shape'],
-        predict_average=True,
-    )
+    validation_sets = []
+    for subject in [1,2,3,4,5,6,7,8]:
+        nsd = NaturalScenesDataset(
+            root=config['dataset_root'],
+            subject=subject,
+            partition="test",
+        )
+        nsd_measures = NSDMeasuresDataset(
+            nsd=nsd,
+            measures=config['measures'],
+            patches_shape=config['patches_shape'],
+            img_shape=config['img_shape'],
+            predict_average=True,
+        )
+        validation_sets.append(nsd_measures)
+    val_set = data.ConcatDataset(validation_sets)
     val_dataloader = data.DataLoader(
         val_set,
         batch_size=config['batch_size'],
@@ -111,7 +119,7 @@ def main(config):
         pin_memory=True,
     )
 
-    config["exp_name"] = f'{config["subject"]}_{config["measures"]}'
+    config["exp_name"] = config["measures"]
     os.makedirs(os.path.join(config["results_folder"], config["exp_name"]), exist_ok=True)
 
     wandb.init(
@@ -141,7 +149,7 @@ if __name__ == "__main__":
     parser.add_argument("--bottleneck_sequential", action=BooleanOptionalAction, default=False)
 
     # Diffusion Extractor Parameters
-    parser.add_argument("--model_id", type=str, default="runwayml/stable-diffusion-v1-5")
+    parser.add_argument("--model_id", type=str, default="stabilityai/stable-diffusion-xl-base-1.0")
     parser.add_argument("--num_timesteps", type=int, default=1000)
     parser.add_argument("--save_timestep", type=int, nargs="+", default=[0])
     parser.add_argument("--prompt", type=str, default="")
@@ -150,16 +158,15 @@ if __name__ == "__main__":
 
     # Dataset Parameters
     parser.add_argument("--dataset_root", type=str, default="./data/NSD")
-    parser.add_argument("--subject", type=int, default=1)
     parser.add_argument("--measures", type=str, default="warmth")
     parser.add_argument("--patches_shape", type=tuple, default=(64, 64))
     parser.add_argument("--img_shape", type=tuple, default=(448, 448))
 
     # General Parameters
-    parser.add_argument("--results_folder", type=str, default="./data/readout_guidance/results")
+    parser.add_argument("--results_folder", type=str, default="./data/readout_guidance/")
     parser.add_argument("--validation_epochs", type=int, default=1)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=18)
     parser.add_argument("--num_epochs", type=int, default=15)
@@ -173,9 +180,10 @@ if __name__ == "__main__":
     )
 
     # WandB Parameters
-    parser.add_argument("--wandb-project", type=str, default="masters-thesis")
+    parser.add_argument("--wandb-project", type=str, default="masters-thesis-readout")
     parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
     parser.add_argument("--wandb-mode", type=str, default="online")
 
-    config = parser.parse_args()
+    args = parser.parse_args()
+    config = vars(args)
     main(config)
