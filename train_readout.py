@@ -65,7 +65,7 @@ def main(config):
     diffusion_extractor, aggregation_network = load_models(config)
     config["output_resolution"] = diffusion_extractor.output_resolution
     config["load_resolution"] = diffusion_extractor.load_resolution
-    config["dataset_args"]["control_range"] = (-5,5)
+    config["dataset_args"] = {"control_range": (-5,5)}
     config["dims"] = diffusion_extractor.dims
 
     optimizer = load_optimizer(config, aggregation_network)
