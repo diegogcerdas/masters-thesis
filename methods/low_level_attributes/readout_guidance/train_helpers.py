@@ -55,19 +55,17 @@ def renormalize(x, range_a, range_b):
     min_b, max_b = range_b
     return ((x - min_a) / (max_a - min_a)) * (max_b - min_b) + min_b
 
-def log_grid(imgs, target, pred):
+def log_grid(imgs, target, pred, control_range):
     num_images = min(16, imgs.shape[0])
-    min_val = min(target.min(), pred.min())
-    max_val = max(target.max(), pred.max())
     fig, axes = plt.subplots(3, num_images, figsize=(num_images*3, 9))
     for i in range(num_images):
-        img = F.interpolate(imgs[i].detach().cpu(), 128).permute(1, 2, 0)
+        img = F.interpolate(imgs[i].unsqueeze(0).detach().cpu(), 128).squeeze(0).permute(1, 2, 0)
         img = renormalize(img, (-1, 1), (0, 1))
         axes[0, i].imshow(img)
         axes[0, i].axis('off')
-        axes[1, i].imshow(target[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val, cmap='gray')
+        axes[1, i].imshow(target[i].detach().cpu().permute(1, 2, 0), vmin=control_range[0], vmax=control_range[1], cmap='gray')
         axes[1, i].axis('off')
-        axes[2, i].imshow(pred[i].detach().cpu().permute(1, 2, 0), vmin=min_val, vmax=max_val, cmap='gray')
+        axes[2, i].imshow(pred[i].detach().cpu().permute(1, 2, 0), vmin=control_range[0], vmax=control_range[1], cmap='gray')
         axes[2, i].axis('off')
     plt.tight_layout()
     buf = io.BytesIO()
@@ -78,7 +76,11 @@ def log_grid(imgs, target, pred):
     return img
 
 def save_model(config, aggregation_network, epoch):
+    dict_to_save = {
+        "config": config,
+        "aggregation_network": aggregation_network.state_dict(),
+    }
     ckpt_folder = os.path.join(config['results_folder'], config['exp_name'], 'checkpoints')
     os.makedirs(ckpt_folder, exist_ok=True)
-    torch.save(aggregation_network.state_dict(), os.path.join(ckpt_folder, f"epoch-{str(epoch).zfill(3)}.pt"))
-    torch.save(aggregation_network.state_dict(), os.path.join(ckpt_folder, f"last.pt"))
+    torch.save(dict_to_save, os.path.join(ckpt_folder, f"epoch-{str(epoch).zfill(3)}.pt"))
+    torch.save(dict_to_save, os.path.join(ckpt_folder, f"last.pt"))

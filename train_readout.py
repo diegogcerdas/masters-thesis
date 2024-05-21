@@ -24,27 +24,6 @@ def train(
     global_step = 0
     for epoch in range(config["num_epochs"]):
 
-        #################### VALIDATION ####################
-
-        if epoch % config["validation_epochs"] == 0:
-            
-            total_loss = 0
-            with torch.no_grad():
-
-                for j, batch in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
-                    
-                    imgs, target = prepare_batch(batch, config)
-                    pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs)
-                    total_loss += F.mse_loss(pred, target).item()
-
-                    if j <= config["log_max"]:
-                        grid = log_grid(imgs, target, pred)
-                        grid.save(os.path.join(config["results_folder"], config["exp_name"], f"epoch-{epoch}_b-{j}.png"))
-                
-                save_model(config, aggregation_network, epoch)
-            
-            wandb.log({"val/loss": total_loss/len(val_dataloader)}, step=global_step)
-
         ##################### TRAINING #####################
 
         for batch in tqdm(train_dataloader, total=len(train_dataloader)):
@@ -59,11 +38,35 @@ def train(
             optimizer.zero_grad()
             global_step += 1
 
+        #################### VALIDATION ####################
+
+        if epoch % config["validation_epochs"] == 0:
+            
+            total_loss = 0
+            with torch.no_grad():
+
+                for j, batch in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
+                    
+                    imgs, target = prepare_batch(batch, config)
+                    pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs)
+                    total_loss += F.mse_loss(pred, target).item()
+
+                    if j <= config["log_max"]:
+                        grid = log_grid(imgs, target, pred, config["dataset_args"]["control_range"])
+                        grid.save(os.path.join(config["results_folder"], config["exp_name"], f"epoch-{epoch}_b-{j}.png"))
+                
+                save_model(config, aggregation_network, epoch)
+            
+            wandb.log({"val/loss": total_loss/len(val_dataloader)}, step=global_step)
+        
+
 def main(config):
 
     diffusion_extractor, aggregation_network = load_models(config)
     config["output_resolution"] = diffusion_extractor.output_resolution
     config["load_resolution"] = diffusion_extractor.load_resolution
+    config["dataset_args"]["control_range"] = (-5,5)
+    config["dims"] = diffusion_extractor.dims
 
     optimizer = load_optimizer(config, aggregation_network)
     
@@ -149,7 +152,7 @@ if __name__ == "__main__":
     parser.add_argument("--bottleneck_sequential", action=BooleanOptionalAction, default=False)
 
     # Diffusion Extractor Parameters
-    parser.add_argument("--model_id", type=str, default="stabilityai/stable-diffusion-xl-base-1.0")
+    parser.add_argument("--model_id", type=str, default="runwayml/stable-diffusion-v1-5")
     parser.add_argument("--num_timesteps", type=int, default=1000)
     parser.add_argument("--save_timestep", type=int, nargs="+", default=[0])
     parser.add_argument("--prompt", type=str, default="")
@@ -169,7 +172,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_workers", type=int, default=18)
-    parser.add_argument("--num_epochs", type=int, default=15)
+    parser.add_argument("--num_epochs", type=int, default=3)
     parser.add_argument("--log_max", type=int, default=5)
     parser.add_argument(
         "--device",
