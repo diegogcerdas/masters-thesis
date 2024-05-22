@@ -48,7 +48,7 @@ def train(
                 for j, batch in tqdm(enumerate(val_dataloader), total=len(val_dataloader)):
                     
                     imgs, target = prepare_batch(batch, config)
-                    pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs)
+                    pred = get_hyperfeats(diffusion_extractor, aggregation_network, imgs, eval_mode=True)
                     total_loss += F.mse_loss(pred, target).item()
 
                     if j <= config["log_max"]:
@@ -83,7 +83,6 @@ def main(config):
             measures=config['measures'],
             patches_shape=config['patches_shape'],
             img_shape=config['img_shape'],
-            predict_average=True,
         )
         training_sets.append(nsd_measures)
     train_set = data.ConcatDataset(training_sets)
@@ -109,7 +108,6 @@ def main(config):
             measures=config['measures'],
             patches_shape=config['patches_shape'],
             img_shape=config['img_shape'],
-            predict_average=True,
         )
         validation_sets.append(nsd_measures)
     val_set = data.ConcatDataset(validation_sets)

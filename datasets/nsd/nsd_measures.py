@@ -18,13 +18,14 @@ class NSDMeasuresDataset(data.Dataset):
         measures: List[str],
         patches_shape: tuple,
         img_shape: tuple,
-        predict_average: bool,
+        predict_average: bool = True,
     ):
         super().__init__()
         self.measures = measures if isinstance(measures, list) else [measures]
         assert all([m in ["depth", "surface_normal", "gaussian_curvature", "warmth", "saturation", "brightness", "entropy"] for m in self.measures])
         assert (img_shape[0] % patches_shape[0] == 0) and (img_shape[1] % patches_shape[1] == 0)
         self.nsd = nsd
+        self.patches_shape = patches_shape
         self.img_shape = img_shape
         self.patch_size = (img_shape[0]//patches_shape[0], img_shape[1]//patches_shape[1])
         self.predict_average = predict_average
@@ -32,6 +33,7 @@ class NSDMeasuresDataset(data.Dataset):
         self.stdevs = self.compute_stdevs()
         if nsd.return_activations:
             self.targets = self.compute_targets()
+            self.target_size = 1 if predict_average else len(nsd.roi_indices)
 
     def __len__(self):
         return len(self.nsd)

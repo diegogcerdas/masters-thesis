@@ -86,7 +86,11 @@ def load_aggregation_network(aggregation_config, device, dtype):
     weights_path = aggregation_config["aggregation_ckpt"]
     state_dict = torch.load(weights_path)
     config = state_dict["config"]
-    aggregation_kwargs = config.get("aggregation_kwargs", {})
+    aggregation_kwargs = {
+        "use_output_head": config["use_output_head"],
+        "output_head_channels": config["output_head_channels"],
+        "bottleneck_sequential": config["bottleneck_sequential"],
+    }
     custom_aggregation_kwargs = {k: v for k, v in aggregation_config.items() if "aggregation" not in k}
     aggregation_kwargs = {**aggregation_kwargs, **custom_aggregation_kwargs}
     aggregation_network = AggregationNetwork(
