@@ -42,7 +42,7 @@ def set_edits_control(
         edit["control_image"] = control_image
         edit["control"] = control
         edit["control_range"] = control_range
-    return edits
+    return edits, control_image
 
 
 def main(config):
@@ -57,8 +57,7 @@ def main(config):
     # Create edit config and load aggregation network
     edits = rg_helpers.get_edits(config, config["device"], dtype)
 
-    control_image = np.load(config['control_path'])
-    edits = set_edits_control(
+    edits, control_image = set_edits_control(
         config,
         edits,
         image_dim,
@@ -101,7 +100,7 @@ if __name__ == "__main__":
         'img_shape': (448, 448),
 
         'model_path': 'runwayml/stable-diffusion-v1-5',
-        'prompt': 'a photo of a train',
+        'prompt': 'a photo of a kitchen',
         'output_dir': './data/readout_guidance/depth/examples',
 
         'batch_size': 2,
@@ -111,7 +110,7 @@ if __name__ == "__main__":
         'rg_kwargs': [
             {
                 'head_type': 'spatial',
-                'loss_rescale': 0.5,
+                'loss_rescale': 1,
                 'aggregation_kwargs': {'aggregation_ckpt': './data/readout_guidance/depth/checkpoints/last.pt'},
             }
         ],
@@ -119,7 +118,7 @@ if __name__ == "__main__":
         'generation_kwargs': {
             'text_weight': 7.5,
             'rg_weight': 2e-2,
-            'rg_ratio': [0.0, 0.5],
+            'rg_ratio': [0.0, 1.0],
             'eta': 1.0,
             'num_timesteps': 100,
             'negative_prompt': '',

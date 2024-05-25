@@ -47,3 +47,26 @@ def save_for_attribute_pairs(
             shift_vector = x1 - x0
             shift_vector /= np.linalg.norm(shift_vector)
             np.save(os.path.join(save_dir, f'{description}.npy'), shift_vector)
+
+def save_for_nouns(
+    nouns_path: str = "./data/mscoco_nouns.txt",
+    save_dir: str = "./data/shift_vectors/nouns",
+):
+    # Load the CLIP model and tokenizer
+    clip, _, _ = open_clip.create_model_and_transforms(model_name="ViT-H-14", pretrained="laion2b_s32b_b79k")
+    tokenizer = open_clip.get_tokenizer("ViT-H-14")
+
+    # Load the nouns
+    with open(nouns_path, 'r') as file:
+        lines = file.readlines()
+        nouns = [line.strip() for line in lines]
+    os.makedirs(save_dir, exist_ok=True)
+
+    for noun in tqdm(nouns, total=len(nouns)):
+
+        with torch.no_grad():
+            # Encode the text using CLIP
+            text = tokenizer([noun])
+            shift_vector = clip.encode_text(text)[0].float().detach().cpu().numpy()
+            shift_vector /= np.linalg.norm(shift_vector)
+            np.save(os.path.join(save_dir, f'{noun}.npy'), shift_vector)

@@ -43,7 +43,7 @@ class NSDMeasuresDataset(data.Dataset):
         img = transforms.ToTensor()(img).float()
         measures = []
         for m in self.measures:
-            measures.append(self.compute_measure(idx, m))
+            measures.append(self.compute_measure(idx, m, normalize=False))
         measures = np.concatenate(measures, axis=0)
         # Resize measures
         measures = torch.from_numpy(measures).float().unsqueeze(0)

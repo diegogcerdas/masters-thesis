@@ -115,7 +115,7 @@ def get_pca(x):
 def feats_to_rgb(x, latents_scale=None):
     # Only plot if feats has channels=3
     if x.shape[1] != 3:
-        return None
+        x = x.repeat(1, 3, 1, 1)
     x = x.detach().clone()
     if latents_scale is not None:
         x = renormalize(x, latents_scale, (0, 1))

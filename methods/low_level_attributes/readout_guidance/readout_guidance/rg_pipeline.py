@@ -206,9 +206,11 @@ def diffusion_step(
         with torch.no_grad():
             image = rg_helpers.decode_latents(model.vae, latents_x0s)
             image = rg_helpers.view_images(image)
+            image.save(f'first_{i}.png')
             display(image)
         if controller.gt_feat is not None and controller.obs_feat is not None:
             image = rg_helpers.view_images([controller.gt_feat, controller.obs_feat])
+            image.save(f'second_{i}.png')
             display(image)
     torch.cuda.empty_cache()
     gc.collect()

@@ -369,7 +369,7 @@ def embed_timestep(unet, sample, timestep):
 def get_edits(config, device, dtype):
     edits = []
     for item in config["rg_kwargs"]:
-        item = OmegaConf.to_container(item, resolve=True)
+        item = OmegaConf.to_container(OmegaConf.create(item), resolve=True)
         aggregation_network, aggregation_config = load_aggregation_network(item["aggregation_kwargs"], device, dtype)
         item["aggregation_network"] = aggregation_network
         item["aggregation_kwargs"] = {**item["aggregation_kwargs"], **aggregation_config}

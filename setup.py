@@ -3,7 +3,7 @@ from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
 from datasets.nsd.nsd_measures import NSDMeasuresDataset
 from datasets.nsd.utils.coco_utils import download_coco_annotation_file
 from methods.low_level_attributes.image_measures import *
-from methods.high_level_attributes.shift_vectors import save_for_attribute_pairs
+from methods.high_level_attributes.shift_vectors import save_for_attribute_pairs, save_for_nouns
 from datasets.nsd.utils.coco_utils import save_segmentation_masks, build_coco_category_search
 from datasets.nsd.utils.nsd_utils import build_roi_inverted_index
 
@@ -46,4 +46,10 @@ for subject in [1,2,3,4,5,6,7,8]:
 save_for_attribute_pairs(
     os.path.join(data_root, "attribute_pairs.tsv"),
     os.path.join(data_root, "shift_vectors/attribute_pairs")
+)
+
+# 8. Compute and save high-level noun shift vectors
+save_for_nouns(
+    os.path.join(data_root, "mscoco_nouns.txt"),
+    os.path.join(data_root, "shift_vectors/nouns")
 )
