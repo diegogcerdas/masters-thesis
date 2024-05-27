@@ -20,8 +20,9 @@ class NSDCLIPFeaturesDataset(data.Dataset):
         self.nsd = nsd
         self.clip_extractor_type = clip_extractor_type
         self.predict_average = predict_average
-        self.features = self.load_features()
-        self.D = self.load_distance_matrix()
+        indices = list(self.nsd.df.index)
+        self.features = self.load_features()[indices, :]
+        self.D = self.load_distance_matrix()[indices, :][:, indices]
         if nsd.return_activations:
             self.targets = self.compute_targets()
             self.target_size = 1 if predict_average else len(nsd.roi_indices)

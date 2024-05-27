@@ -27,6 +27,7 @@ class CLIPExtractor(nn.Module):
         self.to(device)
 
     def extract_for_dataset(self, dataset: NaturalScenesDataset):
+        assert dataset.partition == "all"
         features = []
         for i in tqdm(range(len(dataset))):
             img = dataset[i][0]

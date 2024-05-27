@@ -38,9 +38,14 @@ class NaturalScenesDataset(data.Dataset):
             self.df = self.df[self.df.partition == partition]
 
         if self.return_activations:
+            indices = []
+            for f in self.df['filename']:
+                idx = int(f[-18:-14]) - 1
+                indices.append(idx)
             self.fmri_data, self.fs_indices, self.fs_coords = load_whole_surface(
                 self.subj_dir, hemisphere
             )
+            self.fmri_data = self.fmri_data[indices, :]
             self.hemisphere = hemisphere
             self.roi_indices = []
             if roi is not None:

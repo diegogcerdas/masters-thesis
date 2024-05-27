@@ -50,6 +50,6 @@ save_for_attribute_pairs(
 
 # 8. Compute and save high-level noun shift vectors
 save_for_nouns(
-    os.path.join(data_root, "mscoco_nouns.txt"),
+    os.path.join(data_root, "laion_nouns.txt"),
     os.path.join(data_root, "shift_vectors/nouns")
 )
