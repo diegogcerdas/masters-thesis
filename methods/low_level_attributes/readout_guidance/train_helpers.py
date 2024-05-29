@@ -1,11 +1,16 @@
+import io
+import os
+
+import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 from PIL import Image
-import io, os
-import matplotlib.pyplot as plt
-from methods.low_level_attributes.readout_guidance.dhf.diffusion_extractor import DiffusionExtractor
-from methods.low_level_attributes.readout_guidance.dhf.aggregation_network import AggregationNetwork
-    
+
+from methods.low_level_attributes.readout_guidance.dhf.aggregation_network import \
+    AggregationNetwork
+from methods.low_level_attributes.readout_guidance.dhf.diffusion_extractor import \
+    DiffusionExtractor
+
 
 def load_models(config):
     diffusion_extractor = DiffusionExtractor(config, config['device'])

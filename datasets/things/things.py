@@ -1,12 +1,13 @@
 import os
 from typing import List, Union
 
+import numpy as np
 import pandas as pd
+from mat73 import loadmat
 from PIL import Image
 from torch.utils import data
 from torchvision import transforms
-from mat73 import loadmat
-import numpy as np
+
 
 class ThingsDataset(data.Dataset):
     def __init__(

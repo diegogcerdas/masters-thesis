@@ -3,13 +3,12 @@ import os
 import numpy as np
 import pandas as pd
 import torch
+from datasets.nsd_clip import NSDFeaturesDataset
+from models.feature_extractor import FeatureExtractor
 from PIL import Image
 from scipy.stats import spearmanr
 from sklearn.linear_model import LinearRegression
 from torchvision import transforms
-
-from datasets.nsd_clip import NSDFeaturesDataset
-from models.feature_extractor import FeatureExtractor
 
 
 def encode(

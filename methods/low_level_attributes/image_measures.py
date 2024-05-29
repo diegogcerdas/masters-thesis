@@ -1,14 +1,16 @@
-from datasets.nsd.nsd import NaturalScenesDataset
-import torch
 import os
-from PIL import Image
+
 import numpy as np
-from methods.low_level_attributes.xtc_network import UNet
+import torch
 import visualpriors
-from tqdm import tqdm
+from PIL import Image
 from skimage.filters.rank import entropy
 from skimage.morphology import disk
 from skimage.util import img_as_ubyte
+from tqdm import tqdm
+
+from datasets.nsd.nsd import NaturalScenesDataset
+from methods.low_level_attributes.xtc_network import UNet
 
 
 def save_for_nsd(dataset_root, subject, function, save_name):

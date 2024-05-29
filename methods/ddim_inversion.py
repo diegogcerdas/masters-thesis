@@ -1,5 +1,5 @@
-from diffusers import StableDiffusionPipeline, DDIMInverseScheduler
 import torch
+from diffusers import DDIMInverseScheduler, StableDiffusionPipeline
 from PIL import Image
 
 

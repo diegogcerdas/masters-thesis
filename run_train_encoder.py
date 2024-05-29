@@ -4,16 +4,65 @@ from argparse import BooleanOptionalAction
 
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
+import torch.optim as optim
 import wandb
+
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger, WandbLogger
 from torch.utils import data
+from torcheval.metrics.functional import r2_score
 
-from datasets.nsd import NaturalScenesDataset
-from datasets.nsd_clip import NSDFeaturesDataset
-from methods.brain_encoding.brain_encoder import EncoderModule
+from datasets.nsd.nsd import NaturalScenesDataset
+from methods.brain_encoding.adeli_transformer import DETR_Brain_Encoder
 from methods.brain_encoding.callbacks import WandbR2Callback, WandbTSNECallback
-from utils.configs import config_from_args, ConfigEncoder
+
+
+class EncoderModule(pl.LightningModule):
+    def __init__(
+        self,
+        enc_output_layer: int,
+        output_size: int,
+        learning_rate: float,
+    ):
+        super(EncoderModule, self).__init__()
+        self.save_hyperparameters()
+        self.learning_rate = learning_rate
+        self.model = DETR_Brain_Encoder(enc_output_layer, output_size)
+
+    def forward(self, x):
+        return self.model(x)
+
+    def configure_optimizers(self):
+        optimizer = optim.AdamW(self.parameters(), lr=self.learning_rate)
+        return optimizer
+
+    def compute_loss(self, batch, mode):
+        img, target, _ = batch
+        pred = self(img).squeeze()
+        loss = F.mse_loss(pred, target)
+        metric = r2_score(pred, target)
+        self.log_stat(f"{mode}_r2", metric)
+        self.log_stat(f"{mode}_loss", loss)
+        return loss, pred
+
+    def log_stat(self, name, stat):
+        self.log(
+            name,
+            stat,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=True,
+            logger=True,
+        )
+
+    def training_step(self, batch, batch_idx):
+        loss, _ = self.compute_loss(batch, "train")
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        _, pred = self.compute_loss(batch, "val")
+        return pred
 
 def main(cfg: ConfigEncoder):
     pl.seed_everything(cfg.seed, workers=True)
@@ -115,16 +164,11 @@ if __name__ == "__main__":
     parser.add_argument("--subject", type=int, default=1)
     parser.add_argument("--roi", default="floc-faces")
     parser.add_argument("--hemisphere", type=str, default="right")
-    parser.add_argument("--feature-extractor-type", type=str, default="clip_1_5")
-    parser.add_argument("--n-neighbors", type=int, default=0)
-    parser.add_argument("--distance-metric", type=str, default="cosine")
-    parser.add_argument("--predict-average", action=BooleanOptionalAction, default=True)
 
     # Training Parameters
     parser.add_argument("--data-dir", type=str, default="./data/")
     parser.add_argument("--ckpt-dir", type=str, default="./checkpoints/")
     parser.add_argument("--logs-dir", type=str, default="./logs/")
-    parser.add_argument("--exp-name", type=str, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -139,11 +183,10 @@ if __name__ == "__main__":
     )
 
     # WandB Parameters
-    parser.add_argument("--wandb-project", type=str, default="masters-thesis")
+    parser.add_argument("--wandb-project", type=str, default="masters-thesis-encoder")
     parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
     parser.add_argument("--wandb-mode", type=str, default="online")
 
     # Parse arguments
-    args = parser.parse_args()
-    cfg = config_from_args(args, mode="encoder")
+    cfg = parser.parse_args()
     main(cfg)

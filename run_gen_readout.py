@@ -1,10 +1,13 @@
-import torch
-import numpy as np
-from PIL import Image
 import os
+
+import numpy as np
+import torch
+from PIL import Image
+
 from datasets.nsd.nsd import NaturalScenesDataset
 from datasets.nsd.nsd_measures import NSDMeasuresDataset
-from methods.low_level_attributes.readout_guidance.readout_guidance import rg_helpers
+from methods.low_level_attributes.readout_guidance.readout_guidance import \
+    rg_helpers
 
 
 def get_control(config, control_range, image_dim):

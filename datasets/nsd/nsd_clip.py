@@ -1,12 +1,14 @@
 import os
+
 import numpy as np
 from PIL import Image
 from sklearn import manifold
 from sklearn.metrics import pairwise_distances
 from torch.utils import data
+from torchvision import transforms
+
 from datasets.nsd.nsd import NaturalScenesDataset
 from methods.high_level_attributes.clip_extractor import create_clip_extractor
-from torchvision import transforms
 
 
 class NSDCLIPFeaturesDataset(data.Dataset):
@@ -24,7 +26,7 @@ class NSDCLIPFeaturesDataset(data.Dataset):
         self.features = self.load_features()[indices, :]
         self.D = self.load_distance_matrix()[indices, :][:, indices]
         if nsd.return_activations:
-            self.targets = self.compute_targets()
+            self.targets = self.compute_targets() # TODO: remove normalization
             self.target_size = 1 if predict_average else len(nsd.roi_indices)
 
     def __len__(self):

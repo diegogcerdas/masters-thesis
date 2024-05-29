@@ -1,11 +1,11 @@
-from datasets import NSDCLIPFeaturesDataset
-
-from datasets.nsd import NaturalScenesDataset
 from datasets.nsd_clip import NSDFeaturesDataset
 from sklearn.linear_model import LinearRegression
-from methods.high_level_attributes.clip_extractor import create_feature_extractor
 from torchvision import transforms
 
+from datasets import NSDCLIPFeaturesDataset
+from datasets.nsd import NaturalScenesDataset
+from methods.high_level_attributes.clip_extractor import \
+    create_feature_extractor
 
 # CLIPLinearEncoder
 

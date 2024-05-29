@@ -21,7 +21,9 @@
 
 import torch
 from diffusers import DiffusionPipeline
-from methods.low_level_attributes.readout_guidance.dhf.stable_diffusion.resnet import set_timestep
+
+from methods.low_level_attributes.readout_guidance.dhf.stable_diffusion.resnet import \
+    set_timestep
 
 """
 Functions for running the generalized diffusion process 

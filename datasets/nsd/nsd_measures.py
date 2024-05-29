@@ -1,14 +1,19 @@
 import os
+from typing import List
+
 import numpy as np
 import torch
-from torch.utils import data
-from datasets.nsd.nsd import NaturalScenesDataset
-from typing import List
 from PIL import Image
 from skimage.util import view_as_blocks
-from tqdm import tqdm
+from torch.utils import data
 from torchvision import transforms
-from methods.low_level_attributes.image_measures import compute_warmth, compute_saturation, compute_brightness, compute_entropy
+from tqdm import tqdm
+
+from datasets.nsd.nsd import NaturalScenesDataset
+from methods.low_level_attributes.image_measures import (compute_brightness,
+                                                         compute_entropy,
+                                                         compute_saturation,
+                                                         compute_warmth)
 
 
 class NSDMeasuresDataset(data.Dataset):
@@ -32,7 +37,7 @@ class NSDMeasuresDataset(data.Dataset):
         self.averages = self.compute_averages()
         self.stdevs = self.compute_stdevs()
         if nsd.return_activations:
-            self.targets = self.compute_targets()
+            self.targets = self.compute_targets() # TODO: remove normalization
             self.target_size = 1 if predict_average else len(nsd.roi_indices)
 
     def __len__(self):

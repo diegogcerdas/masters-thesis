@@ -1,11 +1,13 @@
-import numpy as np
-import pandas as pd
-import open_clip
-from tqdm import tqdm
-import torch
 import os
+
+import numpy as np
+import open_clip
+import pandas as pd
+import torch
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import pairwise_distances
+from tqdm import tqdm
+
 
 def compute_for_activations(targets, features):
     if not isinstance(targets, np.ndarray):

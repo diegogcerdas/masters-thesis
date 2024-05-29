@@ -23,8 +23,9 @@
 import fvcore.nn.weight_init as weight_init
 import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
+from torch import nn
+
 
 class Conv2d(nn.Conv2d):
     def __init__(self, *args, **kwargs):

@@ -1,14 +1,15 @@
 import os
+import pathlib
 from typing import List, Union
 
 import pandas as pd
 from PIL import Image
 from torch.utils import data
 from torchvision import transforms
-import pathlib
 
-from datasets.nsd.utils.nsd_utils import (get_roi_indices, get_voxel_neighborhood,
-                             load_whole_surface, parse_rois)
+from datasets.nsd.utils.nsd_utils import (get_roi_indices,
+                                          get_voxel_neighborhood,
+                                          load_whole_surface, parse_rois)
 
 
 class NaturalScenesDataset(data.Dataset):

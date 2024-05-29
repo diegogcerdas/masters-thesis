@@ -1,14 +1,19 @@
-import torch
-from tqdm import tqdm
-import torch.nn.functional as F
-import os
 import argparse
-import wandb
+import os
 from argparse import BooleanOptionalAction
+
+import torch
+import torch.nn.functional as F
+import wandb
 from torch.utils import data
+from tqdm import tqdm
+
 from datasets.nsd.nsd import NaturalScenesDataset
 from datasets.nsd.nsd_measures import NSDMeasuresDataset
-from methods.low_level_attributes.readout_guidance.train_helpers import load_models, load_optimizer, get_hyperfeats, prepare_batch, log_grid, save_model
+from methods.low_level_attributes.readout_guidance.train_helpers import (
+    get_hyperfeats, load_models, load_optimizer, log_grid, prepare_batch,
+    save_model)
+
 
 def train(
     config,

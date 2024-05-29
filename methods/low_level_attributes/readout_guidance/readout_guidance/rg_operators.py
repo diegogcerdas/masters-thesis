@@ -13,13 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import einops
 from io import BytesIO
+
+import einops
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 from PIL import Image
 from sklearn.decomposition import PCA
-import torch
+
 
 # ======================
 #     Common Utils

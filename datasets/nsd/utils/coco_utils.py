@@ -1,14 +1,16 @@
+import json
 import os
 import urllib.request
 import zipfile
-import pandas as pd
-from pycocotools.coco import COCO
-from datasets.nsd.nsd import NaturalScenesDataset
-from tqdm import tqdm
-import numpy as np
-from PIL import Image
+
 import matplotlib.pyplot as plt
-import json
+import numpy as np
+import pandas as pd
+from PIL import Image
+from pycocotools.coco import COCO
+from tqdm import tqdm
+
+from datasets.nsd.nsd import NaturalScenesDataset
 
 COCO_CLASSES = ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic', 'fire', 'street', 'stop', 
                 'parking', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe', 'hat', 'backpack', 
