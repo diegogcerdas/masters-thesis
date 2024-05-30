@@ -9,13 +9,13 @@ import torch.optim as optim
 import wandb
 
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.loggers import CSVLogger, WandbLogger
+from pytorch_lightning.loggers import WandbLogger
 from torch.utils import data
 from torcheval.metrics.functional import r2_score
+from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
 from methods.brain_encoding.adeli_transformer import DETR_Brain_Encoder
-from methods.brain_encoding.callbacks import WandbR2Callback, WandbTSNECallback
 
 
 class EncoderModule(pl.LightningModule):
@@ -42,16 +42,16 @@ class EncoderModule(pl.LightningModule):
         pred = self(img).squeeze()
         loss = F.mse_loss(pred, target)
         metric = r2_score(pred, target)
-        self.log_stat(f"{mode}_r2", metric)
-        self.log_stat(f"{mode}_loss", loss)
+        self.log_stat(f"{mode}_r2", metric, mode)
+        self.log_stat(f"{mode}_loss", loss, mode)
         return loss, pred
 
-    def log_stat(self, name, stat):
+    def log_stat(self, name, stat, mode):
         self.log(
             name,
             stat,
-            on_step=False,
-            on_epoch=True,
+            on_step=mode=='train',
+            on_epoch=mode=='val',
             prog_bar=True,
             logger=True,
         )
@@ -64,59 +64,76 @@ class EncoderModule(pl.LightningModule):
         _, pred = self.compute_loss(batch, "val")
         return pred
 
-def main(cfg: ConfigEncoder):
+def main(cfg):
     pl.seed_everything(cfg.seed, workers=True)
 
-    if cfg.exp_name is None:
-        roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
-        pred_str = "avg" if cfg.predict_average else "all"
-        cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{cfg.feature_extractor_type}_{cfg.n_neighbors}_{cfg.distance_metric}_{pred_str}_{cfg.seed}"
+    roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
+    pred_str = "avg" if cfg.predict_average else "all"
+    cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{pred_str}_{cfg.seed}"
+
+    if cfg.roi == "hvc":
+        cfg.roi = [
+            "floc-faces", 
+            "floc-words", 
+            "floc-places", 
+            "floc-bodies", 
+            "midventral",
+            "midlateral",
+            "midparietal",
+            "ventral",
+            "lateral",
+            "parietal"
+        ]
+
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((434, 434)),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ]
+    )
 
     # Initialize dataset
-    nsd = NaturalScenesDataset(
-        root=cfg.data_dir,
+    train_set = NaturalScenesDataset(
+        root=cfg.dataset_dir,
         subject=cfg.subject,
         partition="train",
+        transform=transform,
         roi=cfg.roi,
         hemisphere=cfg.hemisphere,
+        return_average=cfg.predict_average,
     )
-    dataset = NSDFeaturesDataset(
-        nsd=nsd,
-        feature_extractor_type=cfg.feature_extractor_type,
-        predict_average=cfg.predict_average,
-        metric=cfg.distance_metric,
-        n_neighbors=cfg.n_neighbors,
-        seed=cfg.seed,
-        device=cfg.device,
-    )
-    del nsd
-
-    # Initialize dataloaders (split into train and validation sets)
-    train_size = int(0.9 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_set, val_set = data.random_split(dataset, [train_size, val_size])
-    train_loader = data.DataLoader(
+    train_dataloader = data.DataLoader(
         train_set,
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
-        drop_last=False,
+        drop_last=True,
         shuffle=True,
         pin_memory=True,
     )
-    val_loader = data.DataLoader(
+    val_set = NaturalScenesDataset(
+        root=cfg.dataset_dir,
+        subject=cfg.subject,
+        partition="test",
+        transform=transform,
+        roi=cfg.roi,
+        hemisphere=cfg.hemisphere,
+        return_average=cfg.predict_average,
+    )
+    val_dataloader = data.DataLoader(
         val_set,
         batch_size=cfg.batch_size,
         num_workers=cfg.num_workers,
         drop_last=False,
         shuffle=False,
+        pin_memory=True,
     )
 
     # Initialize brain encoder
     model = EncoderModule(
-        feature_extractor_type=cfg.feature_extractor_type,
-        output_size=dataset.target_size,
+        enc_output_layer=cfg.enc_output_layer,
+        output_size=train_set.activations.shape[1],
         learning_rate=cfg.learning_rate,
-        device=cfg.device,
     )
 
     # Initialize callbacks
@@ -125,16 +142,12 @@ def main(cfg: ConfigEncoder):
         dirpath=f"{cfg.ckpt_dir}/{cfg.exp_name}",
         save_top_k=1,
         save_last=True,
-        monitor="val_loss",
-        mode="min",
+        monitor="val_r2",
+        mode="max",
     )
-    tsne_callback = WandbTSNECallback(cfg.predict_average)
-    callbacks = [checkpoint_callback, tsne_callback]
-    if not cfg.predict_average:
-        callbacks.append(WandbR2Callback())
+    callbacks = [checkpoint_callback]
 
     # Initialize loggers
-    csv_logger = CSVLogger(cfg.logs_dir, name=cfg.exp_name, flush_logs_every_n_steps=1)
     wandb.init(
         name=cfg.exp_name,
         project=cfg.wandb_project,
@@ -142,7 +155,7 @@ def main(cfg: ConfigEncoder):
         mode=cfg.wandb_mode,
     )
     wandb_logger = WandbLogger()
-    logger = [wandb_logger, csv_logger]
+    logger = [wandb_logger]
 
     # Initialize trainer
     trainer = pl.Trainer(
@@ -152,28 +165,30 @@ def main(cfg: ConfigEncoder):
         max_epochs=cfg.max_epochs,
         logger=logger,
         callbacks=callbacks,
+        num_sanity_val_steps=2,
     )
 
     # Train model
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(model, train_dataloader, val_dataloader)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Model and Data Parameters
     parser.add_argument("--subject", type=int, default=1)
-    parser.add_argument("--roi", default="floc-faces")
+    parser.add_argument("--roi", default="hvc")
     parser.add_argument("--hemisphere", type=str, default="right")
+    parser.add_argument("--enc_output_layer", type=int, default=1)
+    parser.add_argument("--predict_average", action=BooleanOptionalAction, default=False)
 
     # Training Parameters
-    parser.add_argument("--data-dir", type=str, default="./data/")
-    parser.add_argument("--ckpt-dir", type=str, default="./checkpoints/")
-    parser.add_argument("--logs-dir", type=str, default="./logs/")
+    parser.add_argument("--dataset_dir", type=str, default="./data/NSD")
+    parser.add_argument("--ckpt_dir", type=str, default="./checkpoints/")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--num-workers", type=int, default=18)
-    parser.add_argument("--max-epochs", type=int, default=50)
+    parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--batch_size", type=int, default=64)
+    parser.add_argument("--num_workers", type=int, default=18)
+    parser.add_argument("--max_epochs", type=int, default=50)
     parser.add_argument(
         "--device",
         type=str,
@@ -183,9 +198,9 @@ if __name__ == "__main__":
     )
 
     # WandB Parameters
-    parser.add_argument("--wandb-project", type=str, default="masters-thesis-encoder")
-    parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
-    parser.add_argument("--wandb-mode", type=str, default="online")
+    parser.add_argument("--wandb_project", type=str, default="masters-thesis-encoder")
+    parser.add_argument("--wandb_entity", type=str, default="diego-gcerdas")
+    parser.add_argument("--wandb_mode", type=str, default="online")
 
     # Parse arguments
     cfg = parser.parse_args()

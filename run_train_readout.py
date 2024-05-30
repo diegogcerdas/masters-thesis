@@ -188,9 +188,9 @@ if __name__ == "__main__":
     )
 
     # WandB Parameters
-    parser.add_argument("--wandb-project", type=str, default="masters-thesis-readout")
-    parser.add_argument("--wandb-entity", type=str, default="diego-gcerdas")
-    parser.add_argument("--wandb-mode", type=str, default="online")
+    parser.add_argument("--wandb_project", type=str, default="masters-thesis-readout")
+    parser.add_argument("--wandb_entity", type=str, default="diego-gcerdas")
+    parser.add_argument("--wandb_mode", type=str, default="online")
 
     args = parser.parse_args()
     config = vars(args)
