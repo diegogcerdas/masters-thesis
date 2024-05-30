@@ -281,13 +281,13 @@ class DETR_Brain_Encoder(nn.Module):
             normalize_before=False,
             return_intermediate_dec=False,
         )
-        self.query_embed = nn.Embedding(1, feature_dim)
-        self.linear = nn.Linear(feature_dim, output_size)
+        self.query_embed = nn.Embedding(output_size, feature_dim)
+        self.linear = nn.Linear(feature_dim, 1)
 
     def forward(self, x):
         features, pos_embed = self.backbone(x)
         hs = self.transformer(features, self.query_embed.weight, pos_embed) 
         output_tokens = hs[-1]
-        pred = self.linear(output_tokens[:,0,:])
+        pred = self.linear(output_tokens).squeeze(-1)
         return pred
     
