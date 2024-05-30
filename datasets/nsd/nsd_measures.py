@@ -22,7 +22,6 @@ class NSDMeasuresDataset(data.Dataset):
         measures: List[str],
         patches_shape: tuple,
         img_shape: tuple,
-        predict_average: bool = True,
     ):
         super().__init__()
         self.measures = measures if isinstance(measures, list) else [measures]
@@ -32,7 +31,6 @@ class NSDMeasuresDataset(data.Dataset):
         self.patches_shape = patches_shape
         self.img_shape = img_shape
         self.patch_size = (img_shape[0]//patches_shape[0], img_shape[1]//patches_shape[1])
-        self.predict_average = predict_average
         self.averages = self.compute_averages()
         self.stdevs = self.compute_stdevs()
 

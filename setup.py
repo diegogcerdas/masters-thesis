@@ -36,13 +36,13 @@ for subject in [1,2,3,4,5,6,7,8]:
     save_gaussian_curvatures(dataset_root, subject)
 
     # 5. Compute and save CLIP features
-    _ = NSDCLIPFeaturesDataset(nsd, 'clip_1_5', predict_average=True)
-    _ = NSDCLIPFeaturesDataset(nsd, 'clip_2_0', predict_average=True)
+    _ = NSDCLIPFeaturesDataset(nsd, 'clip_1_5')
+    _ = NSDCLIPFeaturesDataset(nsd, 'clip_2_0')
 
     # # 6. Compute measure average and stdev
     nsd = NaturalScenesDataset(dataset_root, subject, "train")
     measures = ["depth", "surface_normal", "gaussian_curvature", "warmth", "saturation", "brightness", "entropy"]
-    _ = NSDMeasuresDataset(nsd, measures, (425, 425), (425, 425), predict_average=True)
+    _ = NSDMeasuresDataset(nsd, measures, (425, 425), (425, 425))
 
 # 7. Compute and save high-level attribute pair shift vectors
 save_for_attribute_pairs(

@@ -1,6 +1,7 @@
 import os
 import pathlib
 from typing import List, Union
+import re
 
 import pandas as pd
 from PIL import Image
@@ -42,10 +43,7 @@ class NaturalScenesDataset(data.Dataset):
             self.df = self.df[self.df.partition == partition]
 
         if self.return_activations:
-            indices = []
-            for f in self.df['filename']:
-                idx = int(f[-18:-14]) - 1
-                indices.append(idx)
+            indices = self.df["index"].values
             self.fmri_data, self.fs_indices, self.fs_coords = load_whole_surface(
                 self.subj_dir, hemisphere
             )
@@ -98,10 +96,11 @@ class NaturalScenesDataset(data.Dataset):
             training_dir = os.path.join(f"subj{self.subject:02d}", "training_split", "training_images")
             for filename in os.listdir(os.path.join(self.root, training_dir)):
                 nsd_idx = int(filename.split("_")[1].split(".")[0][-5:])
+                img_idx = int(re.search('{}(.+?){}'.format('train-', '_nsd'), filename).group(1)) - 1
                 filename = os.path.join(training_dir, filename)
                 partition = "test" if nsd_idx in algonauts_shared872 else "train"
-                data.append([filename, partition, nsd_idx])
-            df = pd.DataFrame(data, columns=["filename", "partition", "nsd_idx"])
-            df = df.sort_values(by=["partition", "filename"])
+                data.append([img_idx, filename, partition, nsd_idx])
+            df = pd.DataFrame(data, columns=["index", "filename", "partition", "nsd_idx"])
+            df = df.sort_values(by=["index"])
             df.to_csv(data_info_path, index=False)
         return df

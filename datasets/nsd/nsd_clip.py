@@ -14,13 +14,11 @@ class NSDCLIPFeaturesDataset(data.Dataset):
         self,
         nsd: NaturalScenesDataset,
         clip_extractor_type: str,
-        predict_average: bool,
     ):
         super().__init__()
         self.nsd = nsd
         self.clip_extractor_type = clip_extractor_type
-        self.predict_average = predict_average
-        indices = list(self.nsd.df.index)
+        indices = self.nsd.df['index'].values
         self.features = self.load_features()[indices, :]
         self.D = self.load_distance_matrix()[indices, :][:, indices]
 
