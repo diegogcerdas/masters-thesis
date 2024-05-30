@@ -29,7 +29,7 @@ class CLIPExtractor(nn.Module):
         assert dataset.transform is None
         features = []
         for i in tqdm(range(len(dataset))):
-            img = transforms.ToTensor(dataset[i][0]).float()
+            img = transforms.ToTensor()(dataset[i][0]).float()
             x = self(img).detach().cpu().numpy()
             features.append(x)
         features = np.concatenate(features, axis=0).astype(np.float32)
