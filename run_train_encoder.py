@@ -52,7 +52,7 @@ class EncoderModule(pl.LightningModule):
             stat,
             on_step=mode=='train',
             on_epoch=mode=='val',
-            prog_bar=False,
+            prog_bar=True,
             logger=True,
         )
 

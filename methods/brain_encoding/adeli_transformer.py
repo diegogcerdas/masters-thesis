@@ -4,6 +4,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 
 def _get_clones(module, N):
@@ -77,10 +78,11 @@ class Backbone_dino_posembed(nn.Module):
         batch_size = x.shape[0]
         num_tokens = (x.shape[-2]//self.patch_size  * x.shape[-1]//self.patch_size) + 1
         # Obtain features from queries
-        _ = self.backbone.get_intermediate_layers(x)[0]
-        feats = self.qkv_feats
-        q = feats.reshape(batch_size, num_tokens, 3, self.num_heads, -1 // self.num_heads).permute(2, 0, 3, 1, 4)[0]
-        x = q.transpose(2, 3).reshape(batch_size, -1, num_tokens)[:,:,1:].reshape(batch_size, -1, x.shape[-2]//self.patch_size, x.shape[-1]//self.patch_size)
+        with torch.no_grad():
+            _ = self.backbone.get_intermediate_layers(x)[0]
+            feats = self.qkv_feats
+            q = feats.reshape(batch_size, num_tokens, 3, self.num_heads, -1 // self.num_heads).permute(2, 0, 3, 1, 4)[0]
+            x = q.transpose(2, 3).reshape(batch_size, -1, num_tokens)[:,:,1:].reshape(batch_size, -1, x.shape[-2]//self.patch_size, x.shape[-1]//self.patch_size)
         # Obtain positional embedding
         pos = self.pos_embed(x).to(x.dtype)
         return x, pos
@@ -281,13 +283,17 @@ class DETR_Brain_Encoder(nn.Module):
             normalize_before=False,
             return_intermediate_dec=False,
         )
-        self.query_embed = nn.Embedding(output_size, feature_dim)
-        self.linear = nn.Linear(feature_dim, 1)
+        self.query_embed = nn.Embedding(1, feature_dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(feature_dim, 2048),
+            nn.ReLU(),
+            nn.Linear(2048, output_size),
+        )
 
     def forward(self, x):
         features, pos_embed = self.backbone(x)
         hs = self.transformer(features, self.query_embed.weight, pos_embed) 
         output_tokens = hs[-1]
-        pred = self.linear(output_tokens).squeeze(-1)
+        pred = self.mlp(output_tokens[:,0])
         return pred
     
