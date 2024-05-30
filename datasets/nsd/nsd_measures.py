@@ -6,7 +6,6 @@ import torch
 from PIL import Image
 from skimage.util import view_as_blocks
 from torch.utils import data
-from torchvision import transforms
 from tqdm import tqdm
 
 from datasets.nsd.nsd import NaturalScenesDataset
@@ -36,16 +35,12 @@ class NSDMeasuresDataset(data.Dataset):
         self.predict_average = predict_average
         self.averages = self.compute_averages()
         self.stdevs = self.compute_stdevs()
-        if nsd.return_activations:
-            self.targets = self.compute_targets() # TODO: remove normalization
-            self.target_size = 1 if predict_average else len(nsd.roi_indices)
 
     def __len__(self):
         return len(self.nsd)
 
     def __getitem__(self, idx):
-        img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
-        img = transforms.ToTensor()(img).float()
+        # Compute measures
         measures = []
         for m in self.measures:
             measures.append(self.compute_measure(idx, m, normalize=False))
@@ -62,12 +57,13 @@ class NSDMeasuresDataset(data.Dataset):
         # Extract patches
         patches = view_as_blocks(measures, (measures.shape[0], self.patch_size[0], self.patch_size[1]))
         patches = torch.tensor(patches).float().mean(dim=(-1,-2)).squeeze(0).permute(2, 0, 1)
-        
+
         if self.nsd.return_activations:
-            target = self.targets[idx]
-            return img, patches, target
-        else: 
-            return img, patches
+            img, activation, _ = self.nsd[idx]
+            return img, patches, activation
+        
+        img, _ = self.nsd[idx]
+        return img, patches
     
     def compute_measure(self, idx, measure, normalize=True):
         f = os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"])
@@ -86,15 +82,6 @@ class NSDMeasuresDataset(data.Dataset):
         if normalize:
             result = (result - self.averages[measure]) / self.stdevs[measure]
         return result
-
-    def compute_targets(self):
-        targets = self.nsd.fmri_data[:, self.nsd.roi_indices]
-        targets_mean = targets.mean(0, keepdims=True)
-        targets_std = targets.std(0, keepdims=True)
-        targets = (targets - targets_mean) / targets_std
-        if self.predict_average:
-            targets = targets.mean(1)
-        return targets
     
     def compute_averages(self):
         folder = os.path.join(self.nsd.subj_dir, "averages")

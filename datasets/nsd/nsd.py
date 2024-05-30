@@ -18,11 +18,13 @@ class NaturalScenesDataset(data.Dataset):
         root: str,
         subject: int,
         partition: str,
+        transform: transforms.Compose = None,
         hemisphere: str = None,
         roi: Union[str, List[str]] = None,
         center_voxel: int = None,
         n_neighbor_voxels: int = None,
         voxel_idx: List[int] = None,
+        return_average: bool = False,
     ):
         super().__init__()
         assert partition in ["train", "test", "all"]
@@ -32,6 +34,7 @@ class NaturalScenesDataset(data.Dataset):
         self.root = pathlib.Path(root)
         self.subject = subject
         self.partition = partition
+        self.transform = transform
         self.subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
 
         self.df = self.build_image_info_df()
@@ -65,16 +68,20 @@ class NaturalScenesDataset(data.Dataset):
                 self.roi_indices += voxel_idx
             assert len(self.roi_indices) > 0
             self.roi_indices = sorted(list(set(self.roi_indices)))
+            self.activations = self.fmri_data[:, self.roi_indices]
+            if return_average:
+                self.activations = self.activations.mean(axis=1)
 
     def __len__(self):
         return self.df.shape[0]
 
     def __getitem__(self, idx):
-        img = Image.open(os.path.join(self.root, self.df.iloc[idx]["filename"]))
-        img = transforms.ToTensor()(img).float()
+        img = Image.open(os.path.join(self.root, self.df.iloc[idx]["filename"])).convert("RGB")
+        if self.transform:
+            img = self.transform(img).float()
         nsd_idx = self.df.iloc[idx]["nsd_idx"]
         if self.return_activations:
-            activation = self.fmri_data[idx, self.roi_indices]
+            activation = self.activations[idx]
             return img, activation, nsd_idx
         return img, nsd_idx
 

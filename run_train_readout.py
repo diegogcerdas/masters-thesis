@@ -7,6 +7,7 @@ import torch.nn.functional as F
 import wandb
 from torch.utils import data
 from tqdm import tqdm
+from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
 from datasets.nsd.nsd_measures import NSDMeasuresDataset
@@ -82,6 +83,7 @@ def main(config):
             root=config['dataset_root'],
             subject=subject,
             partition="train",
+            transform=transforms.ToTensor(),
         )
         nsd_measures = NSDMeasuresDataset(
             nsd=nsd,

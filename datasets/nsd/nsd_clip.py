@@ -1,11 +1,9 @@
 import os
 
 import numpy as np
-from PIL import Image
 from sklearn import manifold
 from sklearn.metrics import pairwise_distances
 from torch.utils import data
-from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
 from methods.high_level_attributes.clip_extractor import create_clip_extractor
@@ -25,20 +23,16 @@ class NSDCLIPFeaturesDataset(data.Dataset):
         indices = list(self.nsd.df.index)
         self.features = self.load_features()[indices, :]
         self.D = self.load_distance_matrix()[indices, :][:, indices]
-        if nsd.return_activations:
-            self.targets = self.compute_targets() # TODO: remove normalization
-            self.target_size = 1 if predict_average else len(nsd.roi_indices)
 
     def __len__(self):
         return len(self.nsd)
 
     def __getitem__(self, idx):
-        img = Image.open(os.path.join(self.nsd.root, self.nsd.df.iloc[idx]["filename"]))
-        img = transforms.ToTensor()(img).float()
         features = self.features[idx]
         if self.nsd.return_activations:
-            target = self.targets[idx]
-            return img, features, target
+            img, activation, _ = self.nsd[idx]
+            return img, features, activation
+        img, _ = self.nsd[idx]
         return img, features
 
     def load_features(self):
@@ -67,15 +61,6 @@ class NSDCLIPFeaturesDataset(data.Dataset):
         else:
             D = np.load(f).astype(np.float32)
         return D
-    
-    def compute_targets(self):
-        targets = self.nsd.fmri_data[:, self.nsd.roi_indices]
-        targets_mean = targets.mean(0, keepdims=True)
-        targets_std = targets.std(0, keepdims=True)
-        targets = (targets - targets_mean) / targets_std
-        if self.predict_average:
-            targets = targets.mean(1)
-        return targets
 
     def compute_low_dim(self, seed):
         print("Computing low dimensional representation...")

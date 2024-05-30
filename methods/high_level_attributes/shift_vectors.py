@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 
 def compute_for_activations(targets, features):
-    if not isinstance(targets, np.ndarray):
+    if isinstance(targets, torch.Tensor):
         targets = targets.numpy()
     if targets.ndim == 1:
         targets = targets[:, np.newaxis]
