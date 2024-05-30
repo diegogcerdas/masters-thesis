@@ -26,6 +26,7 @@ class CLIPExtractor(nn.Module):
 
     def extract_for_dataset(self, dataset: NaturalScenesDataset):
         assert dataset.partition == "all"
+        assert dataset.transform is None
         features = []
         for i in tqdm(range(len(dataset))):
             img = transforms.ToTensor(dataset[i][0]).float()
