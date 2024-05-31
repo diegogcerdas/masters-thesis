@@ -16,7 +16,7 @@ from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
 from methods.brain_encoding.adeli_transformer import DETR_Brain_Encoder
-from methods.brain_encoding.callbacks import WandbR2Callback
+from methods.brain_encoding.callbacks import WandbCorrCallback
 
 
 class EncoderModule(pl.LightningModule):
@@ -144,7 +144,7 @@ def main(cfg):
         monitor="val_r2",
         mode="max",
     )
-    r2_callback = WandbR2Callback(locs=val_set.fs_coords[val_set.fs_indices][val_set.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_set.subj_dir)
+    r2_callback = WandbCorrCallback(locs=val_set.fs_coords[val_set.fs_indices][val_set.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_set.subj_dir)
     callbacks = [checkpoint_callback, r2_callback]
 
     # Initialize loggers

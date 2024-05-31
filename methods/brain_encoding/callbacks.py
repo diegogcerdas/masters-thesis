@@ -80,7 +80,7 @@ class WandbTSNECallback(pl.Callback):
         self.low_dim.append(low_dim)
 
 
-class WandbR2Callback(pl.Callback):
+class WandbCorrCallback(pl.Callback):
     def __init__(self, locs, hemisphere, subjdir):
         super().__init__()
         self.locs = locs
@@ -97,11 +97,10 @@ class WandbR2Callback(pl.Callback):
         self.targets = np.concatenate(self.targets)
         self.preds = np.concatenate(self.preds)
 
-        metric = r2_score(
-            torch.tensor(self.preds),
-            torch.tensor(self.targets),
-            multioutput="raw_values",
-        ).numpy()
+        metric = []
+        for i in range(self.preds.shape[1]):
+            metric.append(np.corrcoef(self.preds[:, i], self.targets[:, i])[0, 1])
+        metric = np.array(metric)
 
         indices = set()
         for roi in [
@@ -128,10 +127,10 @@ class WandbR2Callback(pl.Callback):
 
         f = plt.figure(figsize=(5, 5))
         plt.scatter(self.locs[indices, 0], self.locs[indices, 1], c=metric[indices], cmap="hot", alpha=0.5)
-        plt.colorbar(label="R2")   
+        plt.colorbar(label="Correlation")   
         plt.title(f"Average: {metric.mean():.2f}")      
         plt.tight_layout()
-        trainer.logger.log_image(key="R2", images=[f])
+        trainer.logger.log_image(key="R", images=[f])
         plt.show()
 
         self.targets = []
