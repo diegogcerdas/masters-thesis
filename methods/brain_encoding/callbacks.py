@@ -3,6 +3,7 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from torcheval.metrics.functional import r2_score
+from datasets.nsd.utils.nsd_utils import (get_roi_indices, parse_rois)
 
 
 class WandbTSNECallback(pl.Callback):
@@ -80,8 +81,11 @@ class WandbTSNECallback(pl.Callback):
 
 
 class WandbR2Callback(pl.Callback):
-    def __init__(self):
+    def __init__(self, locs, hemisphere, subjdir):
         super().__init__()
+        self.locs = locs
+        self.hemisphere = hemisphere
+        self.subjdir = subjdir
         self.targets = []
         self.preds = []
 
@@ -92,17 +96,42 @@ class WandbR2Callback(pl.Callback):
     ) -> None:
         self.targets = np.concatenate(self.targets)
         self.preds = np.concatenate(self.preds)
+
         metric = r2_score(
             torch.tensor(self.preds),
             torch.tensor(self.targets),
             multioutput="raw_values",
-        )
+        ).numpy()
 
-        f = plt.figure(figsize=(15, 5))
-        plt.bar(range(len(metric)), metric)
+        indices = set()
+        for roi in [
+            "V2v", 
+            "V2d", 
+            "V3v", 
+            "V3d", 
+            "hV4",
+            "floc-bodies",
+            "floc-faces",
+            "floc-places",
+            "floc-words",
+            "midventral",
+            "midlateral",
+            "midparietal",
+            "ventral",
+            "lateral",
+            "parietal",
+        ] + (["V1v", "V1d", "early"] if self.hemisphere == "right" else []):
+            roi_names, roi_classes = parse_rois([roi])
+            ind = get_roi_indices(self.subjdir, roi_names, roi_classes, self.hemisphere)
+            indices.update(ind)
+        indices = list(indices)
+
+        f = plt.figure(figsize=(5, 5))
+        plt.scatter(self.locs[indices, 0], self.locs[indices, 1], c=metric[indices], cmap="hot", alpha=0.5)
+        plt.colorbar()    
         plt.tight_layout()
         trainer.logger.log_image(key="R2", images=[f])
-        plt.close()
+        plt.show()
 
         self.targets = []
         self.preds = []

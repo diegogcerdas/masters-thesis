@@ -16,19 +16,19 @@ from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
 from methods.brain_encoding.adeli_transformer import DETR_Brain_Encoder
+from methods.brain_encoding.callbacks import WandbR2Callback
 
 
 class EncoderModule(pl.LightningModule):
     def __init__(
         self,
-        enc_output_layer: int,
         output_size: int,
         learning_rate: float,
     ):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters()
         self.learning_rate = learning_rate
-        self.model = DETR_Brain_Encoder(enc_output_layer, output_size)
+        self.model = DETR_Brain_Encoder(output_size)
 
     def forward(self, x):
         return self.model(x)
@@ -88,7 +88,7 @@ def main(cfg):
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Resize((434, 434)),
+            transforms.Resize((224, 224)),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ]
     )
@@ -131,7 +131,6 @@ def main(cfg):
 
     # Initialize brain encoder
     model = EncoderModule(
-        enc_output_layer=cfg.enc_output_layer,
         output_size=train_set.activations.shape[1],
         learning_rate=cfg.learning_rate,
     )
@@ -145,7 +144,8 @@ def main(cfg):
         monitor="val_r2",
         mode="max",
     )
-    callbacks = [checkpoint_callback]
+    r2_callback = WandbR2Callback(locs=val_set.fs_coords[val_set.fs_indices][val_set.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_set.subj_dir)
+    callbacks = [checkpoint_callback, r2_callback]
 
     # Initialize loggers
     wandb.init(
@@ -165,7 +165,9 @@ def main(cfg):
         max_epochs=cfg.max_epochs,
         logger=logger,
         callbacks=callbacks,
-        num_sanity_val_steps=2,
+        num_sanity_val_steps=0,
+        gradient_clip_val=1.0,
+        gradient_clip_algorithm="norm",
     )
 
     # Train model
@@ -178,7 +180,6 @@ if __name__ == "__main__":
     parser.add_argument("--subject", type=int, default=1)
     parser.add_argument("--roi", default="hvc")
     parser.add_argument("--hemisphere", type=str, default="right")
-    parser.add_argument("--enc_output_layer", type=int, default=1)
     parser.add_argument("--predict_average", action=BooleanOptionalAction, default=False)
 
     # Training Parameters

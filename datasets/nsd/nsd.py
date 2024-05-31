@@ -51,12 +51,15 @@ class NaturalScenesDataset(data.Dataset):
             self.hemisphere = hemisphere
             self.roi_indices = []
             if roi is not None:
-                if isinstance(roi, str):
-                    roi = [roi]
-                roi_names, roi_classes = parse_rois(roi)
-                self.roi_indices += get_roi_indices(
-                    self.subj_dir, roi_names, roi_classes, hemisphere
-                )
+                if roi == "all":
+                    self.roi_indices = list(range(self.fmri_data.shape[1]))
+                else:
+                    if isinstance(roi, str):
+                        roi = [roi]
+                    roi_names, roi_classes = parse_rois(roi)
+                    self.roi_indices += get_roi_indices(
+                        self.subj_dir, roi_names, roi_classes, hemisphere
+                    )
             if center_voxel is not None and n_neighbor_voxels is not None:
                 self.roi_indices += get_voxel_neighborhood(
                     self.fs_indices, self.fs_coords, center_voxel, n_neighbor_voxels
