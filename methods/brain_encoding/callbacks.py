@@ -128,7 +128,8 @@ class WandbR2Callback(pl.Callback):
 
         f = plt.figure(figsize=(5, 5))
         plt.scatter(self.locs[indices, 0], self.locs[indices, 1], c=metric[indices], cmap="hot", alpha=0.5)
-        plt.colorbar()    
+        plt.colorbar(label="R2")   
+        plt.title(f"Average: {metric.mean():.2f}")      
         plt.tight_layout()
         trainer.logger.log_image(key="R2", images=[f])
         plt.show()
