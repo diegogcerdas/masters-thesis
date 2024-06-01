@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import open_clip
+import numpy as np
+import functools
 
 class Backbone_dino(nn.Module):
 
@@ -18,6 +21,35 @@ class Backbone_dino(nn.Module):
 
     def forward(self, x: torch.Tensor):
         return self.backbone.get_intermediate_layers(x, n=self.enc_output_layer)
+    
+
+class CLIPBackbone(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.clip, _, self.transform = open_clip.create_model_and_transforms(
+            model_name="ViT-H-14", pretrained="laion2b_s32b_b79k"
+        )
+        self.transform.transforms.pop(-3)  # remove rgb transform
+        self.transform.transforms.pop(-2)  # remove totensor transform
+        self.num_channels = 1280
+
+        self.enc_output_layer = np.linspace(4, 32, 8).astype(int) - 1
+
+        self.interm_feats = {}
+        for enc_output_layer in self.enc_output_layer:
+          custom_f = functools.partial(self.hook_fn_forward_interm_feats, enc_output_layer)
+          self.clip.visual.transformer.resblocks[enc_output_layer].ls_2.register_forward_hook(custom_f)
+
+    def hook_fn_forward_interm_feats(self, enc_output_layer, module, input, output):
+        output = self.clip.visual.ln_post(output.permute(1,0,2))
+        self.interm_feats[enc_output_layer] = output[:,1:]
+
+    @torch.no_grad()
+    def forward(self, x: torch.Tensor):
+        x = self.transform(x)
+        _ = self.clip.encode_image(x)
+        out = [self.interm_feats[k] for k in sorted(self.interm_feats.keys())]
+        return out
     
 
 class AttentionBlock(nn.Module):
