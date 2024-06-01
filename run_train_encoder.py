@@ -140,7 +140,7 @@ def main(cfg):
     checkpoint_callback = ModelCheckpoint(
         dirpath=f"{cfg.ckpt_dir}/{cfg.exp_name}",
         save_top_k=1,
-        save_last=True,
+        save_last=False,
         monitor="val_r2",
         mode="max",
     )
