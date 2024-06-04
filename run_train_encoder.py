@@ -131,7 +131,7 @@ def main(cfg):
 
     # Initialize brain encoder
     model = EncoderModule(
-        output_size=train_set.activations.shape[1],
+        output_size=1 if len(train_set.activations.shape) == 1 else train_set.activations.shape[1],
         learning_rate=cfg.learning_rate,
     )
 
