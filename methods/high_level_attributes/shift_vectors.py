@@ -4,19 +4,9 @@ import numpy as np
 import open_clip
 import pandas as pd
 import torch
-from sklearn.linear_model import LinearRegression
 from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
 
-
-def compute_for_activations(targets, features):
-    if isinstance(targets, torch.Tensor):
-        targets = targets.numpy()
-    if targets.ndim == 1:
-        targets = targets[:, np.newaxis]
-    model = LinearRegression(fit_intercept=False).fit(targets, features - features.mean(axis=0))
-    shift_vectors = model.coef_ / np.linalg.norm(model.coef_, axis=0)
-    return shift_vectors
 
 def order_by_shift_vector(shift_vector, features, return_sims=False):
     sims = 1 - pairwise_distances(shift_vector.reshape(1,-1), features, metric="cosine")[0]

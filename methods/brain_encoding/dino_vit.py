@@ -1,8 +1,5 @@
 import torch
 import torch.nn as nn
-import open_clip
-import numpy as np
-import functools
 
 class Backbone_dino(nn.Module):
 
@@ -21,35 +18,6 @@ class Backbone_dino(nn.Module):
 
     def forward(self, x: torch.Tensor):
         return self.backbone.get_intermediate_layers(x, n=self.enc_output_layer)
-    
-
-class CLIPBackbone(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.clip, _, self.transform = open_clip.create_model_and_transforms(
-            model_name="ViT-H-14", pretrained="laion2b_s32b_b79k"
-        )
-        self.transform.transforms.pop(-3)  # remove rgb transform
-        self.transform.transforms.pop(-2)  # remove totensor transform
-        self.num_channels = 1280
-
-        self.enc_output_layer = np.linspace(4, 32, 8).astype(int) - 1
-
-        self.interm_feats = {}
-        for enc_output_layer in self.enc_output_layer:
-          custom_f = functools.partial(self.hook_fn_forward_interm_feats, enc_output_layer)
-          self.clip.visual.transformer.resblocks[enc_output_layer].ls_2.register_forward_hook(custom_f)
-
-    def hook_fn_forward_interm_feats(self, enc_output_layer, module, input, output):
-        output = self.clip.visual.ln_post(output.permute(1,0,2))
-        self.interm_feats[enc_output_layer] = output[:,1:]
-
-    @torch.no_grad()
-    def forward(self, x: torch.Tensor):
-        x = self.transform(x)
-        _ = self.clip.encode_image(x)
-        out = [self.interm_feats[k] for k in sorted(self.interm_feats.keys())]
-        return out
     
 
 class AttentionBlock(nn.Module):
@@ -78,8 +46,6 @@ class VisionTransformer(nn.Module):
 
     def __init__(self, embed_dim, hidden_dim, num_heads, num_layers, num_classes, num_patches, dropout=0.0):
         super().__init__()
-
-        # Layers/Networks
         self.transformer = nn.Sequential(*[AttentionBlock(embed_dim, hidden_dim, num_heads, dropout=dropout) for _ in range(num_layers)])
         self.mlp_head = nn.Sequential(
             nn.LayerNorm(embed_dim),
@@ -88,10 +54,7 @@ class VisionTransformer(nn.Module):
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, num_classes)
         )
-
-        # Parameters/Embeddings
         self.cls_token = nn.Parameter(torch.randn(1,1,embed_dim))
-        self.pos_embedding = nn.Parameter(torch.randn(1,1+num_patches,embed_dim))
 
 
     def forward(self, x):
@@ -99,7 +62,6 @@ class VisionTransformer(nn.Module):
         # Add CLS token and positional encoding
         cls_token = self.cls_token.repeat(x.shape[0], 1, 1)
         x = torch.cat([cls_token, x], dim=1)
-        # x = x + self.pos_embedding
 
         # Apply Transformer
         x = x.transpose(0, 1)
@@ -111,7 +73,7 @@ class VisionTransformer(nn.Module):
         return out
     
 
-class DETR_Brain_Encoder(nn.Module):
+class DINO_ViT_Encoder(nn.Module):
 
     def __init__(self, output_size):
         super().__init__()

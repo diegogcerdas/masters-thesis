@@ -15,7 +15,7 @@ from torcheval.metrics.functional import r2_score
 from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
-from methods.brain_encoding.adeli_transformer import DETR_Brain_Encoder
+from methods.brain_encoding.dino_vit import DINO_ViT_Encoder
 from methods.brain_encoding.callbacks import WandbCorrCallback
 
 
@@ -28,7 +28,7 @@ class EncoderModule(pl.LightningModule):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters()
         self.learning_rate = learning_rate
-        self.model = DETR_Brain_Encoder(output_size)
+        self.model = DINO_ViT_Encoder(output_size)
 
     def forward(self, x):
         return self.model(x)
@@ -144,8 +144,11 @@ def main(cfg):
         monitor="val_r2",
         mode="max",
     )
-    r2_callback = WandbCorrCallback(locs=val_set.fs_coords[val_set.fs_indices][val_set.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_set.subj_dir)
-    callbacks = [checkpoint_callback, r2_callback]
+    
+    callbacks = [checkpoint_callback]
+    if cfg.predict_average:
+        r2_callback = WandbCorrCallback(locs=val_set.fs_coords[val_set.fs_indices][val_set.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_set.subj_dir)
+        callbacks.append(r2_callback)
 
     # Initialize loggers
     wandb.init(
