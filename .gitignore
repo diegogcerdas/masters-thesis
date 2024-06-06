@@ -1,7 +1,6 @@
 data/
-logs/
 __pycache__/
 wandb/
 test*.ipynb
-*.job
+./*.job
 *.out
