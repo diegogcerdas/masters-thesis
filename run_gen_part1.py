@@ -38,8 +38,8 @@ def main(cfg):
         nsd_idx2captions = json.load(file)
 
     # Select subset
-    mean = nsd.activations.mean()
-    dists_to_mean = np.abs(nsd.activations - mean)
+    mean = nsd.activations.numpy().mean()
+    dists_to_mean = np.abs(nsd.activations.numpy() - mean)
     subset = np.argsort(dists_to_mean)[:cfg.num_images]
 
     # Load shift vector
@@ -47,6 +47,7 @@ def main(cfg):
         nsd=nsd,
         ckpts_path=cfg.ckpt_dir,
     )
+    shift_vector = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
 
     for i in subset:
 
