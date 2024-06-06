@@ -26,6 +26,38 @@ def download_coco_annotation_file(dataset_root: str):
     zip_file_object = zipfile.ZipFile(filehandle, "r")
     zip_file_object.extractall(path=dataset_root)
 
+def save_captions(dataset_root: str, subject: int):
+
+    stim_descriptions = pd.read_csv(os.path.join(dataset_root, "nsd_stim_info_merged.csv"), index_col=0)
+    annot_file = {
+        'train2017': os.path.join(dataset_root, "annotations", "captions_train2017.json"),
+        'val2017': os.path.join(dataset_root, "annotations", "captions_val2017.json"),
+    }
+    coco = {k: COCO(v) for k, v in annot_file.items()}
+    nsd = NaturalScenesDataset(dataset_root, subject, 'all')
+
+    captions ={}
+
+    for i in tqdm(range(len(nsd)), desc=f"Saving COCO captions..."):
+
+        nsd_idx = int(nsd.df.iloc[i]["nsd_idx"])
+        
+        # Get annotations for the current image
+        row = stim_descriptions.iloc[nsd_idx]
+        coco_id = int(row['cocoId'])
+        coco_split = row['cocoSplit']
+
+        # Get captions
+        ann_ids = coco[coco_split].getAnnIds(imgIds=coco_id)
+        anns = coco[coco_split].loadAnns(ann_ids)
+        
+        caption = np.random.choice(anns)['caption']
+        
+        captions[nsd_idx] = caption
+
+    f = os.path.join(dataset_root, f"subj{subject:02d}/nsd_idx2captions.json")
+    json.dump(captions, open(f, "w"))
+
 def save_segmentation_masks(dataset_root: str, subject: int):
 
     stim_descriptions = pd.read_csv(os.path.join(dataset_root, "nsd_stim_info_merged.csv"), index_col=0)

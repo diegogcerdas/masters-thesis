@@ -6,7 +6,18 @@ import pandas as pd
 import torch
 from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
+from datasets.nsd.utils.nsd_utils import (get_roi_indices, parse_rois)
 
+
+def load_shift_vector_from_nsd(nsd, ckpts_path, seed=0):
+    folder = os.path.join(ckpts_path, f"clip_linear/{nsd.subject:02d}_all_{nsd.hemisphere[0]}_all_{seed}")
+    f = os.path.join(folder, sorted(list(os.listdir(folder)))[-1])
+    ckpt = torch.load(f, map_location='cpu')
+    shift_vector = ckpt['state_dict']['model.weight'].numpy()
+    ind = nsd.roi_indices
+    shift_vector = shift_vector[ind].mean(0)
+    shift_vector = shift_vector / np.linalg.norm(shift_vector)
+    return shift_vector
 
 def order_by_shift_vector(shift_vector, features, return_sims=False):
     sims = 1 - pairwise_distances(shift_vector.reshape(1,-1), features, metric="cosine")[0]

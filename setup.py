@@ -3,7 +3,7 @@ from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
 from datasets.nsd.nsd_measures import NSDMeasuresDataset
 from datasets.nsd.utils.coco_utils import (build_coco_category_search,
                                            download_coco_annotation_file,
-                                           save_segmentation_masks)
+                                           save_segmentation_masks, save_captions)
 from datasets.nsd.utils.nsd_utils import build_roi_inverted_index
 from methods.high_level_attributes.shift_vectors import (
     save_for_attribute_pairs, save_for_nouns)
@@ -22,8 +22,9 @@ for subject in [1,2,3,4,5,6,7,8]:
     # 1. Create dataset (and save info CSV file)
     nsd = NaturalScenesDataset(dataset_root, subject, "all")
 
-    # 2. Save segmentation masks
+    # 2. Save segmentation masks and captions
     save_segmentation_masks(dataset_root, subject)
+    save_captions(dataset_root, subject)
 
     # 3. Build indices for images and ROIs
     build_coco_category_search(dataset_root, subject)
