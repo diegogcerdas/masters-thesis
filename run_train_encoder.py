@@ -51,15 +51,6 @@ class EncoderModule(pl.LightningModule):
             input, target, _ = batch
         pred = self(input)
         loss = F.mse_loss(pred, target)
-        corrs = []
-        for i in range(pred.shape[1]):
-            corr = np.corrcoef(pred[:, i].detach().cpu().numpy(), target[:, i].detach().cpu().numpy())[0,1]
-            corrs.append(corr)
-        corrs = np.array(corrs)
-        corr = corrs.mean()
-        r2 = corr**2
-        self.log_stat(f"{mode}_r2", r2, mode)
-        self.log_stat(f"{mode}_corr", corr, mode)
         self.log_stat(f"{mode}_loss", loss, mode)
         return loss, pred
 
@@ -192,13 +183,13 @@ def main(cfg):
         dirpath=f"{cfg.ckpt_dir}/{cfg.exp_name}",
         save_top_k=1,
         save_last=False,
-        monitor="val_r2",
-        mode="max",
+        monitor="val_loss",
+        mode="min",
     )
     
     callbacks = [checkpoint_callback]
     if not cfg.predict_average and cfg.roi == "all":
-        r2_callback = WandbCorrCallback(locs=val_nsd.fs_coords[val_nsd.fs_indices][val_nsd.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_nsd.subj_dir)
+        r2_callback = WandbCorrCallback(locs=val_nsd.fs_coords[val_nsd.fs_indices][val_nsd.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_nsd.subj_dir, clip_linear=cfg.clip_linear)
         callbacks.append(r2_callback)
 
     # Initialize loggers
