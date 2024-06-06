@@ -7,14 +7,16 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 import wandb
+from torch import nn
+import numpy as np
 
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from torch.utils import data
-from torcheval.metrics.functional import r2_score
 from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
+from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
 from methods.brain_encoding.dino_vit import DINO_ViT_Encoder
 from methods.brain_encoding.callbacks import WandbCorrCallback
 
@@ -24,11 +26,16 @@ class EncoderModule(pl.LightningModule):
         self,
         output_size: int,
         learning_rate: float,
+        clip_linear: bool = False,
     ):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters()
         self.learning_rate = learning_rate
-        self.model = DINO_ViT_Encoder(output_size)
+        self.clip_linear = clip_linear
+        if clip_linear:
+            self.model = nn.Linear(1024, output_size)
+        else:
+            self.model = DINO_ViT_Encoder(output_size)
 
     def forward(self, x):
         return self.model(x)
@@ -38,11 +45,21 @@ class EncoderModule(pl.LightningModule):
         return optimizer
 
     def compute_loss(self, batch, mode):
-        img, target, _ = batch
-        pred = self(img).squeeze()
+        if self.clip_linear:
+            _, input, target = batch
+        else:
+            input, target, _ = batch
+        pred = self(input)
         loss = F.mse_loss(pred, target)
-        metric = r2_score(pred, target)
-        self.log_stat(f"{mode}_r2", metric, mode)
+        corrs = []
+        for i in range(pred.shape[1]):
+            corr = np.corrcoef(pred[:, i].detach().cpu().numpy(), target[:, i].detach().cpu().numpy())[0,1]
+            corrs.append(corr)
+        corrs = np.array(corrs)
+        corr = corrs.mean()
+        r2 = corr**2
+        self.log_stat(f"{mode}_r2", r2, mode)
+        self.log_stat(f"{mode}_corr", corr, mode)
         self.log_stat(f"{mode}_loss", loss, mode)
         return loss, pred
 
@@ -63,13 +80,87 @@ class EncoderModule(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         _, pred = self.compute_loss(batch, "val")
         return pred
+    
+def load_data(cfg):
+
+    if cfg.clip_linear:
+
+        transform = transforms.ToTensor()
+    
+    else:
+
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Resize((224, 224)),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], 
+                    std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
+
+    train_nsd = NaturalScenesDataset(
+        root=cfg.dataset_dir,
+        subject=cfg.subject,
+        partition="train",
+        transform=transform,
+        roi=cfg.roi,
+        hemisphere=cfg.hemisphere,
+        return_average=cfg.predict_average,
+    )
+
+    val_nsd = NaturalScenesDataset(
+        root=cfg.dataset_dir,
+        subject=cfg.subject,
+        partition="test",
+        transform=transform,
+        roi=cfg.roi,
+        hemisphere=cfg.hemisphere,
+        return_average=cfg.predict_average,
+    )
+
+    if cfg.clip_linear:
+
+        train_set = NSDCLIPFeaturesDataset(
+            nsd=train_nsd,
+            clip_extractor_type='clip_2_0'
+        )
+        val_set = NSDCLIPFeaturesDataset(
+            nsd=val_nsd,
+            clip_extractor_type='clip_2_0'
+        )
+
+    else:
+
+        train_set, val_set = train_nsd, val_nsd
+
+    train_dataloader = data.DataLoader(
+        train_set,
+        batch_size=cfg.batch_size,
+        num_workers=cfg.num_workers,
+        drop_last=True,
+        shuffle=True,
+        pin_memory=True,
+    )
+    val_dataloader = data.DataLoader(
+        val_set,
+        batch_size=cfg.batch_size,
+        num_workers=cfg.num_workers,
+        drop_last=False,
+        shuffle=False,
+        pin_memory=True,
+    )
+            
+    return train_nsd, val_nsd, train_dataloader, val_dataloader
 
 def main(cfg):
     pl.seed_everything(cfg.seed, workers=True)
 
     roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
     pred_str = "avg" if cfg.predict_average else "all"
-    cfg.exp_name = f"{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{pred_str}_{cfg.seed}"
+    folder = "clip_linear" if cfg.clip_linear else "dino_vit"
+    cfg.exp_name = f"{folder}/{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{pred_str}_{cfg.seed}"
 
     if cfg.roi == "hvc":
         cfg.roi = [
@@ -85,54 +176,14 @@ def main(cfg):
             "parietal"
         ]
 
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor(),
-            transforms.Resize((224, 224)),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ]
-    )
-
     # Initialize dataset
-    train_set = NaturalScenesDataset(
-        root=cfg.dataset_dir,
-        subject=cfg.subject,
-        partition="train",
-        transform=transform,
-        roi=cfg.roi,
-        hemisphere=cfg.hemisphere,
-        return_average=cfg.predict_average,
-    )
-    train_dataloader = data.DataLoader(
-        train_set,
-        batch_size=cfg.batch_size,
-        num_workers=cfg.num_workers,
-        drop_last=True,
-        shuffle=True,
-        pin_memory=True,
-    )
-    val_set = NaturalScenesDataset(
-        root=cfg.dataset_dir,
-        subject=cfg.subject,
-        partition="test",
-        transform=transform,
-        roi=cfg.roi,
-        hemisphere=cfg.hemisphere,
-        return_average=cfg.predict_average,
-    )
-    val_dataloader = data.DataLoader(
-        val_set,
-        batch_size=cfg.batch_size,
-        num_workers=cfg.num_workers,
-        drop_last=False,
-        shuffle=False,
-        pin_memory=True,
-    )
+    train_nsd, val_nsd, train_dataloader, val_dataloader = load_data(cfg)
 
     # Initialize brain encoder
     model = EncoderModule(
-        output_size=1 if len(train_set.activations.shape) == 1 else train_set.activations.shape[1],
+        output_size=1 if len(train_nsd.activations.shape) == 1 else train_nsd.activations.shape[1],
         learning_rate=cfg.learning_rate,
+        clip_linear=cfg.clip_linear,
     )
 
     # Initialize callbacks
@@ -146,8 +197,8 @@ def main(cfg):
     )
     
     callbacks = [checkpoint_callback]
-    if cfg.predict_average:
-        r2_callback = WandbCorrCallback(locs=val_set.fs_coords[val_set.fs_indices][val_set.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_set.subj_dir)
+    if not cfg.predict_average and cfg.roi == "all":
+        r2_callback = WandbCorrCallback(locs=val_nsd.fs_coords[val_nsd.fs_indices][val_nsd.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_nsd.subj_dir)
         callbacks.append(r2_callback)
 
     # Initialize loggers
@@ -169,8 +220,6 @@ def main(cfg):
         logger=logger,
         callbacks=callbacks,
         num_sanity_val_steps=0,
-        gradient_clip_val=1.0,
-        gradient_clip_algorithm="norm",
     )
 
     # Train model
@@ -184,15 +233,16 @@ if __name__ == "__main__":
     parser.add_argument("--roi", default="hvc")
     parser.add_argument("--hemisphere", type=str, default="right")
     parser.add_argument("--predict_average", action=BooleanOptionalAction, default=False)
+    parser.add_argument("--clip_linear", action=BooleanOptionalAction, default=False)
 
     # Training Parameters
     parser.add_argument("--dataset_dir", type=str, default="./data/NSD")
-    parser.add_argument("--ckpt_dir", type=str, default="./checkpoints/")
+    parser.add_argument("--ckpt_dir", type=str, default="./data/checkpoints/")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--num_workers", type=int, default=18)
-    parser.add_argument("--max_epochs", type=int, default=50)
+    parser.add_argument("--max_epochs", type=int, default=15)
     parser.add_argument(
         "--device",
         type=str,
