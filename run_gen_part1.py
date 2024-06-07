@@ -42,11 +42,25 @@ def main(cfg):
     dists_to_mean = np.abs(nsd.activations.numpy() - mean)
     subset = np.argsort(dists_to_mean)[:cfg.num_images]
 
-    # Load shift vector
-    shift_vector = load_shift_vector_from_nsd(
-        nsd=nsd,
-        ckpts_path=cfg.ckpt_dir,
-    )
+    # Load shift vector from rest of subjects
+    subjects = [1,2,3,4,5,6,7,8]
+    subjects.remove(cfg.subject)
+    shift_vectors = []
+    for s in subjects:
+        nsd_temp = NaturalScenesDataset(
+            root=cfg.dataset_root,
+            subject=s,
+            partition="test",
+            hemisphere=cfg.hemisphere,
+            roi=cfg.roi,
+        )
+        shift_vector = load_shift_vector_from_nsd(
+            nsd=nsd_temp,
+            ckpts_path=cfg.ckpt_dir,
+        )
+        shift_vectors.append(shift_vector)
+    shift_vectors = np.stack(shift_vectors, axis=0)
+    shift_vector = shift_vectors.mean(axis=0)
     shift_vector = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
 
     for i in subset:
