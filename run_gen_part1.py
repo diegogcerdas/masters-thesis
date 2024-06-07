@@ -14,6 +14,10 @@ from methods.high_level_attributes.shift_vectors import load_shift_vector_from_n
 
 def main(cfg):
 
+    print('##############################')
+    print(f'### Subject {cfg.subject} ROI {cfg.roi} Hemisphere {cfg.hemisphere} ####')
+    print('##############################')
+
     # Since we use stabilityai/stable-diffusion-2-1-unclip, we fix the clip model to ViT-H-14 (laion2b_s32b_b79k)
     pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1-unclip"
     ddim_pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1"
@@ -105,6 +109,10 @@ def main(cfg):
 
         names = [f'{j:04d}' for j in range(cfg.num_frames*2-1)]
         save_images(images, os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}_{cfg.hemisphere}/{i:04d}"), names)
+
+    print('##############################')
+    print('### Finished ####')
+    print('##############################')
 
 def slerp(v0, v1, num, t0=0, t1=1):
     v0 = v0.detach().cpu().numpy()
