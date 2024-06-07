@@ -137,8 +137,8 @@ if __name__ == "__main__":
     parser.add_argument("--roi", default="PPA")
     parser.add_argument("--hemisphere", type=str, default="right")
 
-    parser.add_argument("--num_frames", type=int, default=26)
-    parser.add_argument("--num_images", type=int, default=100)
+    parser.add_argument("--num_frames", type=int, default=16)
+    parser.add_argument("--num_images", type=int, default=50)
     parser.add_argument("--t1", type=float, default=0.5)
     parser.add_argument("--output_dir", type=str, default='.data/part1_outputs')
     parser.add_argument("--seed", type=int, default=0)
