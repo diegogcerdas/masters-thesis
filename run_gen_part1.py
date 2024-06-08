@@ -67,7 +67,11 @@ def main(cfg):
     shift_vector = shift_vectors.mean(axis=0)
     shift_vector = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
 
-    for i in subset:
+    for i in sorted(subset):
+
+        folder = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}_{cfg.hemisphere}/{i:04d}")
+        if os.path.exists(folder):
+            continue
 
         # Load source image and perform DDIM inversion
         source_img, _, nsd_idx = nsd[i]
@@ -108,7 +112,7 @@ def main(cfg):
             images.append(img)
 
         names = [f'{j:04d}' for j in range(cfg.num_frames*2-1)]
-        save_images(images, os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}_{cfg.hemisphere}/{i:04d}"), names)
+        save_images(images, folder, names)
 
     print('##############################')
     print('### Finished ####')
