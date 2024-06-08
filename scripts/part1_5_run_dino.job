@@ -22,7 +22,7 @@ do
     do
         for HEMISPHERE in "left" "right"
         do
-            python run_gen_part1.py --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/" --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --output_dir "/gpfs/work5/0/gusr53691/data/part1_outputs/"
+            python run_dino_part1.py --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --output_dir "/gpfs/work5/0/gusr53691/data/part1_outputs/"
         done
     done
 done
