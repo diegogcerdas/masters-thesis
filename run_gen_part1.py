@@ -65,6 +65,7 @@ def main(cfg):
         shift_vectors.append(shift_vector)
     shift_vectors = np.stack(shift_vectors, axis=0)
     shift_vector = shift_vectors.mean(axis=0)
+    shift_vector = shift_vector / np.linalg.norm(shift_vector)
     shift_vector = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
 
     for i in sorted(subset):
