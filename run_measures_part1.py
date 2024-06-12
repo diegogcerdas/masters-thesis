@@ -28,7 +28,7 @@ def main(cfg):
     zoe = zoe.to(cfg.device).eval()
 
     normal_model = UNet() 
-    normals_path = 'data/xtc_checkpoints/rgb2normal_consistency.pth'
+    normals_path = os.path.join(cfg.data_root, 'xtc_checkpoints', 'rgb2normal_consistency.pth')
     normal_model.load_state_dict(torch.load(normals_path, map_location=cfg.device))
     normal_model = normal_model.to(cfg.device).eval()
 
@@ -93,8 +93,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Model and Data Parameters
-    parser.add_argument("--ckpt_dir", type=str, default="./data/checkpoints")
-    parser.add_argument("--output_dir", type=str, default='.data/part1_outputs')
+    parser.add_argument("--data_root", type=str, default="./data")
+    parser.add_argument("--output_dir", type=str, default='./data/part1_outputs')
     parser.add_argument("--subject", type=int, default=1)
     parser.add_argument("--roi", default="PPA")
     parser.add_argument("--hemisphere", type=str, default="right")

@@ -153,7 +153,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_frames", type=int, default=6)
     parser.add_argument("--num_images", type=int, default=50)
     parser.add_argument("--t1", type=float, default=0.5)
-    parser.add_argument("--output_dir", type=str, default='.data/part1_outputs')
+    parser.add_argument("--output_dir", type=str, default='./data/part1_outputs')
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--device",

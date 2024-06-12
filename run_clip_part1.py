@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     # Model and Data Parameters
     parser.add_argument("--ckpt_dir", type=str, default="./data/checkpoints")
-    parser.add_argument("--output_dir", type=str, default='.data/part1_outputs')
+    parser.add_argument("--output_dir", type=str, default='./data/part1_outputs')
     parser.add_argument("--subject", type=int, default=1)
     parser.add_argument("--roi", default="PPA")
     parser.add_argument("--hemisphere", type=str, default="right")
