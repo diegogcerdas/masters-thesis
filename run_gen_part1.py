@@ -51,18 +51,21 @@ def main(cfg):
     subjects.remove(cfg.subject)
     shift_vectors = []
     for s in subjects:
-        nsd_temp = NaturalScenesDataset(
-            root=cfg.dataset_root,
-            subject=s,
-            partition="test",
-            hemisphere=cfg.hemisphere,
-            roi=cfg.roi,
-        )
-        shift_vector = load_shift_vector_from_nsd(
-            nsd=nsd_temp,
-            ckpts_path=cfg.ckpt_dir,
-        )
-        shift_vectors.append(shift_vector)
+        try:
+            nsd_temp = NaturalScenesDataset(
+                root=cfg.dataset_root,
+                subject=s,
+                partition="test",
+                hemisphere=cfg.hemisphere,
+                roi=cfg.roi,
+            )
+            shift_vector = load_shift_vector_from_nsd(
+                nsd=nsd_temp,
+                ckpts_path=cfg.ckpt_dir,
+            )
+            shift_vectors.append(shift_vector)
+        except:
+            continue
     shift_vectors = np.stack(shift_vectors, axis=0)
     shift_vector = shift_vectors.mean(axis=0)
     shift_vector = shift_vector / np.linalg.norm(shift_vector)
