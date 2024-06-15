@@ -53,20 +53,26 @@ def main(cfg):
         preds_right = np.stack(preds_right, axis=0).astype(np.float32)
 
         # left rois
-        for roi in ['OFA', 'FFA-1', 'EBA', 'OPA', 'PPA', 'RSC', 'OWFA', 'VWFA-1', 'VWFA-2']:
-            roi_names, roi_classes = parse_rois([roi])
-            roi_indices = get_roi_indices(os.path.join('/gpfs/work5/0/gusr53691/data/NSD/', f"subj{cfg.subject:02d}"), roi_names, roi_classes, 'left')
-            preds = preds_left[:,roi_indices].mean(-1)
-            f = os.path.join(subj_folder, subfolder, f'dino_vit_preds_{roi}_left.npy')
-            np.save(f, preds)
+        for roi in ['OFA', 'FFA-1', 'FFA-2', 'EBA', 'FBA-1', 'FBA-2', 'OPA', 'PPA', 'RSC', 'OWFA', 'VWFA-1', 'VWFA-2']:
+            try:
+                roi_names, roi_classes = parse_rois([roi])
+                roi_indices = get_roi_indices(os.path.join('/gpfs/work5/0/gusr53691/data/NSD/', f"subj{cfg.subject:02d}"), roi_names, roi_classes, 'left')
+                preds = preds_left[:,roi_indices].mean(-1)
+                f = os.path.join(subj_folder, subfolder, f'dino_vit_preds_{roi}_left.npy')
+                np.save(f, preds)
+            except:
+                continue
 
         # right rois
-        for roi in ['OFA', 'FFA-1', 'FFA-2', 'EBA', 'FBA-2', 'OPA', 'PPA', 'RSC', 'OWFA', 'VWFA-1']:
-            roi_names, roi_classes = parse_rois([roi])
-            roi_indices = get_roi_indices(os.path.join('/gpfs/work5/0/gusr53691/data/NSD/', f"subj{cfg.subject:02d}"), roi_names, roi_classes, 'right')
-            preds = preds_right[:,roi_indices].mean(-1)
-            f = os.path.join(subj_folder, subfolder, f'dino_vit_preds_{roi}_right.npy')
-            np.save(f, preds)
+        for roi in ['OFA', 'FFA-1', 'FFA-2', 'EBA', 'FBA-1', 'FBA-2', 'OPA', 'PPA', 'RSC', 'OWFA', 'VWFA-1', 'VWFA-2']:
+            try:
+                roi_names, roi_classes = parse_rois([roi])
+                roi_indices = get_roi_indices(os.path.join('/gpfs/work5/0/gusr53691/data/NSD/', f"subj{cfg.subject:02d}"), roi_names, roi_classes, 'right')
+                preds = preds_right[:,roi_indices].mean(-1)
+                f = os.path.join(subj_folder, subfolder, f'dino_vit_preds_{roi}_right.npy')
+                np.save(f, preds)
+            except:
+                continue
 
 
     print('##############################')
