@@ -64,8 +64,7 @@ def main(cfg):
             continue
     shift_vectors = np.stack(shift_vectors, axis=0)
     shift_vector = shift_vectors.mean(axis=0)
-    shift_vector = shift_vector / np.linalg.norm(shift_vector)
-    shift_vector1 = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
+    shift_vector1 = shift_vector / np.linalg.norm(shift_vector)
     # ROI 2
     subjects = [1,2,3,4,5,6,7,8]
     subjects.remove(cfg.subject)
@@ -88,11 +87,11 @@ def main(cfg):
             continue
     shift_vectors = np.stack(shift_vectors, axis=0)
     shift_vector = shift_vectors.mean(axis=0)
-    shift_vector = shift_vector / np.linalg.norm(shift_vector)
-    shift_vector2 = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
+    shift_vector2 = shift_vector / np.linalg.norm(shift_vector)
 
     shift_vector = shift_vector1 - shift_vector2
     shift_vector = shift_vector / np.linalg.norm(shift_vector)
+    shift_vector = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
 
     for i in sorted(subset):
 
