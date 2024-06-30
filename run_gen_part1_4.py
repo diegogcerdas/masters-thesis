@@ -29,24 +29,6 @@ def main(cfg):
     dtype = next(pipe.image_encoder.parameters()).dtype
     pipe.safety_checker = None  
 
-    # Load validation dataset
-    nsd = NaturalScenesDataset(
-        root=cfg.dataset_root,
-        subject=cfg.subject,
-        partition="test",
-        hemisphere=cfg.hemisphere,
-        roi=cfg.roi,
-        return_average=True
-    )
-    f = os.path.join(nsd.subj_dir, 'nsd_idx2captions.json')
-    with open(f, 'r') as file:
-        nsd_idx2captions = json.load(file)
-
-    # Select subset
-    mean = nsd.activations.numpy().mean()
-    dists_to_mean = np.abs(nsd.activations.numpy() - mean)
-    subset = np.argsort(dists_to_mean)[:cfg.num_images]
-
     # Load shift vector from rest of subjects
     subjects = [1,2,3,4,5,6,7,8]
     subjects.remove(cfg.subject)
@@ -75,52 +57,73 @@ def main(cfg):
     shift_vector = shift_vector / np.linalg.norm(shift_vector)
     shift_vector = torch.from_numpy(shift_vector).to(cfg.device, dtype=dtype)
 
-    for i in sorted(subset):
+    for subset in ['wild_animals', 'birds', 'vehicles', 'food', 'sports']:
 
-        folder = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}_{cfg.hemisphere}_{cfg.subset}/{i:04d}")
-        if os.path.exists(folder):
-            continue
-
-        # Load source image and perform DDIM inversion
-        source_img, _, nsd_idx = nsd[i]
-        source_img = source_img.resize(resolution)
-        prompt = nsd_idx2captions[str(nsd_idx)]
-        inverted_latents, _ = ddim_inversion(
-            pretrained_model_name_or_path=ddim_pretrained_model_name_or_path,
-            image=source_img,
-            num_inference_steps=50,
-            prompt=prompt,
-            guidance_scale=1,
-            seed=cfg.seed,
-            device=cfg.device,
+        # Load validation dataset
+        nsd = NaturalScenesDataset(
+            root=cfg.dataset_root,
+            subject=cfg.subject,
+            partition="test",
+            hemisphere=cfg.hemisphere,
+            roi=cfg.roi,
+            return_average=True,
+            subset=subset
         )
-        
-        # Get CLIP vision embeddings
-        source_img = pipe.feature_extractor(images=source_img, return_tensors="pt").pixel_values.to(device=cfg.device, dtype=dtype)
-        source_img_embeds = pipe.image_encoder(source_img).image_embeds
+        f = os.path.join(nsd.subj_dir, 'nsd_idx2captions.json')
+        with open(f, 'r') as file:
+            nsd_idx2captions = json.load(file)
 
-        # Get embeddings
-        endpoint1 = shift_vector *  np.linalg.norm(source_img_embeds.squeeze().detach().cpu().numpy())
-        endpoint2 = -shift_vector *  np.linalg.norm(source_img_embeds.squeeze().detach().cpu().numpy())
-        embs1 = slerp(source_img_embeds, endpoint1, cfg.num_frames, t1=cfg.t1).half().to(cfg.device)
-        embs2 = slerp(source_img_embeds, endpoint2, cfg.num_frames, t1=cfg.t1).half().to(cfg.device).flip(0)[:-1]
-        embs = torch.cat([embs2, embs1])
+        # Select sample
+        mean = nsd.activations.numpy().mean()
+        dists_to_mean = np.abs(nsd.activations.numpy() - mean)
+        sample = np.argsort(dists_to_mean)[:cfg.num_images//5]
 
-        images = []
-        for emb in embs:
+        for i in sorted(sample):
 
-            # Generate image
-            img = pipe(
-                latents=inverted_latents,
+            folder = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}_{cfg.hemisphere}_{cfg.subset}/{subset}_{i:04d}")
+            if os.path.exists(folder):
+                continue
+
+            # Load source image and perform DDIM inversion
+            source_img, _, nsd_idx = nsd[i]
+            source_img = source_img.resize(resolution)
+            prompt = nsd_idx2captions[str(nsd_idx)]
+            inverted_latents, _ = ddim_inversion(
+                pretrained_model_name_or_path=ddim_pretrained_model_name_or_path,
+                image=source_img,
+                num_inference_steps=50,
                 prompt=prompt,
-                generator=torch.Generator(device=cfg.device).manual_seed(cfg.seed),
-                image_embeds=emb,
-                noise_level=0,
-            ).images[0]
-            images.append(img)
+                guidance_scale=1,
+                seed=cfg.seed,
+                device=cfg.device,
+            )
+            
+            # Get CLIP vision embeddings
+            source_img = pipe.feature_extractor(images=source_img, return_tensors="pt").pixel_values.to(device=cfg.device, dtype=dtype)
+            source_img_embeds = pipe.image_encoder(source_img).image_embeds
 
-        names = [f'{j:04d}' for j in range(cfg.num_frames*2-1)]
-        save_images(images, folder, names)
+            # Get embeddings
+            endpoint1 = shift_vector *  np.linalg.norm(source_img_embeds.squeeze().detach().cpu().numpy())
+            endpoint2 = -shift_vector *  np.linalg.norm(source_img_embeds.squeeze().detach().cpu().numpy())
+            embs1 = slerp(source_img_embeds, endpoint1, cfg.num_frames, t1=cfg.t1).half().to(cfg.device)
+            embs2 = slerp(source_img_embeds, endpoint2, cfg.num_frames, t1=cfg.t1).half().to(cfg.device).flip(0)[:-1]
+            embs = torch.cat([embs2, embs1])
+
+            images = []
+            for emb in embs:
+
+                # Generate image
+                img = pipe(
+                    latents=inverted_latents,
+                    prompt=prompt,
+                    generator=torch.Generator(device=cfg.device).manual_seed(cfg.seed),
+                    image_embeds=emb,
+                    noise_level=0,
+                ).images[0]
+                images.append(img)
+
+            names = [f'{j:04d}' for j in range(cfg.num_frames*2-1)]
+            save_images(images, folder, names)
 
     print('##############################')
     print('### Finished ####')
