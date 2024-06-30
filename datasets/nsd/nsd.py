@@ -10,7 +10,8 @@ from torchvision import transforms
 
 from datasets.nsd.utils.nsd_utils import (get_roi_indices,
                                           get_voxel_neighborhood,
-                                          load_whole_surface, parse_rois)
+                                          load_whole_surface, parse_rois,
+                                          get_subset_indices)
 
 
 class NaturalScenesDataset(data.Dataset):
@@ -26,6 +27,7 @@ class NaturalScenesDataset(data.Dataset):
         n_neighbor_voxels: int = None,
         voxel_idx: List[int] = None,
         return_average: bool = False,
+        subset: str = None,
     ):
         super().__init__()
         assert partition in ["train", "test", "all"]
@@ -36,11 +38,15 @@ class NaturalScenesDataset(data.Dataset):
         self.subject = subject
         self.partition = partition
         self.transform = transform
+        self.return_average = return_average
         self.subj_dir = os.path.join(self.root, f"subj{self.subject:02d}")
 
         self.df = self.build_image_info_df()
         if partition != "all":
             self.df = self.df[self.df.partition == partition]
+        
+        if subset is not None:
+            self.df = self.df[self.df.nsd_idx.isin(get_subset_indices(self, subset))]
 
         if self.return_activations:
             indices = self.df["index"].values

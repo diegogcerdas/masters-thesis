@@ -7,6 +7,9 @@ import torch
 from tqdm import tqdm
 from datasets.nsd.utils.nsd_utils import (get_roi_indices, parse_rois)
 from methods.high_level_attributes.clip_extractor import create_clip_extractor
+from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
+from datasets.nsd.nsd import NaturalScenesDataset
+from methods.high_level_attributes.shift_vectors import load_shift_vector
 
 
 def main(cfg):
@@ -17,19 +20,31 @@ def main(cfg):
 
     clip = create_clip_extractor('clip_2_0', cfg.device)
 
-    roi_names, roi_classes = parse_rois([cfg.roi1])
-    roi_indices1 = get_roi_indices(os.path.join('/gpfs/work5/0/gusr53691/data/NSD/', f"subj{cfg.subject:02d}"), roi_names, roi_classes, cfg.hemisphere)
+    dataset = NSDCLIPFeaturesDataset(
+        nsd = NaturalScenesDataset(
+            root='data/nsd',
+            subject=cfg.subject,
+            partition='train',
+            hemisphere=cfg.hemisphere,
+            roi=cfg.roi1,
+            return_average=False,
+        ),
+        clip_extractor_type='clip_2_0'
+    )
+    shift_vector1 = load_shift_vector(dataset)
 
-    roi_names, roi_classes = parse_rois([cfg.roi2])
-    roi_indices2 = get_roi_indices(os.path.join('/gpfs/work5/0/gusr53691/data/NSD/', f"subj{cfg.subject:02d}"), roi_names, roi_classes, cfg.hemisphere)
-
-    if cfg.hemisphere == 'left':
-        ckpt_path = os.path.join(cfg.ckpt_dir, 'clip_linear', f'0{cfg.subject}_all_l_all_0')
-    else:
-        ckpt_path = os.path.join(cfg.ckpt_dir, 'clip_linear', f'0{cfg.subject}_all_r_all_0')
-    ckpt_path = os.path.join(ckpt_path, sorted(list(os.listdir(ckpt_path)))[-1])
-
-    encoder = EncoderModule.load_from_checkpoint(ckpt_path).to(cfg.device).eval()
+    dataset = NSDCLIPFeaturesDataset(
+        nsd = NaturalScenesDataset(
+            root='data/nsd',
+            subject=cfg.subject,
+            partition='train',
+            hemisphere=cfg.hemisphere,
+            roi=cfg.roi2,
+            return_average=False,
+        ),
+        clip_extractor_type='clip_2_0'
+    )
+    shift_vector2 = load_shift_vector(dataset)
 
     subj_folder = os.path.join(cfg.output_dir, f'{cfg.subject}_{cfg.roi1}_{cfg.roi2}_{cfg.hemisphere}')
     subfolders = sorted([f for f in os.listdir(subj_folder) if os.path.isdir(os.path.join(subj_folder, f))])
@@ -48,20 +63,21 @@ def main(cfg):
         img_list = [os.path.join(subj_folder, subfolder, f) for f in img_list[img_list_order]]
 
         features = []
-        preds = []
+        preds1 = []
+        preds2 = []
         for img in tqdm(img_list):
             img = Image.open(img).convert("RGB")
             img = transforms.ToTensor()(img).float()
-            x = clip(img)
-            pred = encoder(x).squeeze(0).detach().cpu().numpy()
-            feat = x.detach().cpu().numpy()
-            preds.append(pred)
-            features.append(feat)
+            x = clip(img).squeeze(0).detach().cpu().numpy()
+            pred1 = x @ shift_vector1
+            pred2 = x @ shift_vector2
+            preds1.append(pred1)
+            preds2.append(pred2)
+            features.append(x)
 
-        features = np.concatenate(features, axis=0).astype(np.float32)
-        preds = np.stack(preds, axis=0).astype(np.float32)
-        preds1 = preds[:,roi_indices1].mean(-1)
-        preds2 = preds[:,roi_indices2].mean(-1)
+        features = np.stack(features).astype(np.float32)
+        preds1 = np.array(preds1).astype(np.float32)
+        preds2 = np.array(preds2).astype(np.float32)
         np.save(f1, features)
         np.save(f2, preds1)
         np.save(f3, preds2)
@@ -75,7 +91,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # Model and Data Parameters
-    parser.add_argument("--ckpt_dir", type=str, default="./data/checkpoints")
     parser.add_argument("--output_dir", type=str, default='./data/part1_2_outputs')
     parser.add_argument("--subject", type=int, default=5)
     parser.add_argument("--roi1", default="OPA")

@@ -21,6 +21,6 @@ for ROI in "OFA" "FFA-1" "FFA-2" "EBA" "FBA-1" "FBA-2" "PPA" "RSC" "OPA" "OWFA" 
 do
     for HEMISPHERE in "left" "right"
     do
-        python run_measures_part1.py --data_root "/gpfs/work5/0/gusr53691/data/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --output_dir "/gpfs/work5/0/gusr53691/data/part1_outputs/"
+        python run_measures_part1_1.py --data_root "/gpfs/work5/0/gusr53691/data/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --output_dir "/gpfs/work5/0/gusr53691/data/part1_outputs/"
     done
 done

@@ -7,8 +7,9 @@ from diffusers import StableUnCLIPImg2ImgPipeline
 from methods.ddim_inversion import ddim_inversion
 from methods.img_utils import save_images
 from datasets.nsd.nsd import NaturalScenesDataset
+from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
 
-from methods.high_level_attributes.shift_vectors import load_shift_vector_from_nsd
+from methods.high_level_attributes.shift_vectors import load_shift_vector
 
 
 def main(cfg):
@@ -48,16 +49,18 @@ def main(cfg):
     shift_vectors = []
     for s in subjects:
         try:
-            nsd_temp = NaturalScenesDataset(
-                root=cfg.dataset_root,
-                subject=s,
-                partition="test",
-                hemisphere=cfg.hemisphere,
-                roi=cfg.roi1,
+            dataset = NSDCLIPFeaturesDataset(
+                nsd=NaturalScenesDataset(
+                    root=cfg.dataset_root,
+                    subject=s,
+                    partition="train",
+                    hemisphere=cfg.hemisphere,
+                    roi=cfg.roi1,
+                ),
+                clip_extractor_type='clip_2_0'
             )
-            shift_vector = load_shift_vector_from_nsd(
-                nsd=nsd_temp,
-                ckpts_path=cfg.ckpt_dir,
+            shift_vector = load_shift_vector(
+                dataset,
             )
             shift_vectors.append(shift_vector)
         except:
@@ -71,16 +74,18 @@ def main(cfg):
     shift_vectors = []
     for s in subjects:
         try:
-            nsd_temp = NaturalScenesDataset(
-                root=cfg.dataset_root,
-                subject=s,
-                partition="test",
-                hemisphere=cfg.hemisphere,
-                roi=cfg.roi2,
+            dataset = NSDCLIPFeaturesDataset(
+                nsd=NaturalScenesDataset(
+                    root=cfg.dataset_root,
+                    subject=s,
+                    partition="train",
+                    hemisphere=cfg.hemisphere,
+                    roi=cfg.roi2,
+                ),
+                clip_extractor_type='clip_2_0'
             )
-            shift_vector = load_shift_vector_from_nsd(
-                nsd=nsd_temp,
-                ckpts_path=cfg.ckpt_dir,
+            shift_vector = load_shift_vector(
+                dataset,
             )
             shift_vectors.append(shift_vector)
         except:
@@ -170,7 +175,6 @@ if __name__ == "__main__":
 
     # Model and Data Parameters
     parser.add_argument("--dataset_root", type=str, default="./data/NSD")
-    parser.add_argument("--ckpt_dir", type=str, default="./data/checkpoints")
     parser.add_argument("--subject", type=int, default=5)
     parser.add_argument("--roi1", default="OPA")
     parser.add_argument("--roi2", default="PPA")

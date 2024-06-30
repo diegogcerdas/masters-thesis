@@ -6,16 +6,16 @@ import pandas as pd
 import torch
 from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
-from datasets.nsd.utils.nsd_utils import (get_roi_indices, parse_rois)
 
 
-def load_shift_vector_from_nsd(nsd, ckpts_path, seed=0):
-    folder = os.path.join(ckpts_path, f"clip_linear/{nsd.subject:02d}_all_{nsd.hemisphere[0]}_all_{seed}")
-    f = os.path.join(folder, sorted(list(os.listdir(folder)))[-1])
-    ckpt = torch.load(f, map_location='cpu')
-    shift_vector = ckpt['state_dict']['model.weight'].numpy()
-    ind = nsd.roi_indices
-    shift_vector = shift_vector[ind].mean(0)
+def load_shift_vector(dataset, lmbda=1e+3):
+    assert dataset.nsd.partition == 'train'
+    assert dataset.nsd.return_average == False
+    X = dataset.features
+    Y = dataset.nsd.activations.numpy()
+    W = X.T @ X + lmbda * np.eye(X.shape[1])
+    W = (np.linalg.inv(W) @ X.T @ Y).T
+    shift_vector = W.mean(0)
     shift_vector = shift_vector / np.linalg.norm(shift_vector)
     return shift_vector
 

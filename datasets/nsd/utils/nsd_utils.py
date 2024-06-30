@@ -7,6 +7,46 @@ import torch
 from nilearn import datasets
 from nilearn.surface import load_surf_mesh
 from tqdm import tqdm
+import json
+
+supercategories = {
+    'person_super': ['person'],
+    'vehicle': ['bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat'],
+    'outdoor': ['fire', 'stop', 'parking', 'bench'],
+    'animal': ['bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe'],
+    'wild_animal': ['horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 'giraffe'],
+    'accessory': ['backpack', 'umbrella', 'handbag', 'tie', 'suitcase'],
+    'sports_super': ['frisbee', 'skis', 'snowboard', 'sports', 'kite', 'baseball', 'skateboard', 'surfboard', 'tennis'],
+    'kitchen': ['bottle', 'wine', 'cup', 'fork', 'knife', 'spoon', 'bowl'],
+    'food': ['banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot', 'hot', 'pizza', 'donut', 'cake'],
+    'furniture': ['chair', 'couch', 'potted', 'bed', 'dining', 'toilet'],
+    'electronic': ['tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell'],
+    'appliance': ['microwave', 'oven', 'toaster', 'sink', 'refrigerator'],
+    'indoor': ['book', 'clock', 'vase', 'scissors', 'teddy', 'hair', 'toothbrush'],
+}
+
+subsets = {
+    'wild_animals': {
+        'all_positives': [['wild_animal']],
+        'negatives': ['person', 'vehicle', 'food']
+    },
+    'vehicles': {
+        'all_positives': [['vehicle']],
+        'negatives': ['person', 'animal', 'food']
+    },
+    'sports': {
+        'all_positives': [['person', 'sports_super']],
+        'negatives': ['animal', 'vehicle', 'food']
+    },
+    'food': {
+        'all_positives': [['food']],
+        'negatives': ['person', 'animal', 'vehicle']
+    },
+    'birds': {
+        'all_positives': [['bird']],
+        'negatives': ['person', 'food', 'vehicle', 'wild_animal', 'cat', 'dog']
+    },
+}
 
 
 def load_whole_surface(data_dir, hemisphere, dtype=np.float32):
@@ -246,3 +286,43 @@ def build_roi_inverted_index(dataset_root: str, subject: int, hemisphere: str):
     df.to_csv(
         os.path.join(subj_dir, f"inverted_index_roi_{hemisphere}.csv"), index=False
     )
+
+def get_subset_indices(nsd, subset):
+    assert subset in ['wild_animals', 'birds', 'vehicles', 'sports', 'food']
+    f = os.path.join(nsd.subj_dir, 'category2nsd_idxs.json')
+    category2nsd_idx = json.load(open(f))
+    f = os.path.join(nsd.subj_dir, 'nsd_idx2categories.json')
+    nsd_idx2category = json.load(open(f))
+    for cat, elements in supercategories.items():
+        idxs = [category2nsd_idx[el] for el in elements]
+        idxs = np.unique(np.concatenate(idxs)).astype(int).tolist()
+        category2nsd_idx[cat] = idxs
+        for idx in idxs:
+            nsd_idx2category[str(idx)].append(cat)
+    all_positives = subsets[subset]['all_positives']
+    negatives = subsets[subset]['negatives']
+    remaining_negatives = {}
+    all_indices = set()
+    for positives in all_positives:
+        pos = set(category2nsd_idx[positives[0]])
+        for positive in positives:
+            pos = set.intersection(pos, set(category2nsd_idx[positive])) 
+        for p in pos:
+            if p not in nsd.df['nsd_idx'].values:
+                continue
+            categories = nsd_idx2category[str(p)]
+            rem = []
+            keep = True
+            for c in categories:
+                if c in negatives:
+                    keep = False
+                elif c not in positives:
+                    rem.append(c)
+            if keep:
+                all_indices.add(p)
+                for r in rem:
+                    remaining_negatives.setdefault(r, 0)
+                    remaining_negatives[r] += 1
+    all_indices = np.array(list(all_indices))
+    return all_indices
+    

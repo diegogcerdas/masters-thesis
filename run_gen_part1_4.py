@@ -60,6 +60,7 @@ def main(cfg):
                     partition="train",
                     hemisphere=cfg.hemisphere,
                     roi=cfg.roi,
+                    subset=cfg.subset
                 ),
                 clip_extractor_type='clip_2_0'
             )
@@ -76,7 +77,7 @@ def main(cfg):
 
     for i in sorted(subset):
 
-        folder = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}_{cfg.hemisphere}/{i:04d}")
+        folder = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}_{cfg.hemisphere}_{cfg.subset}/{i:04d}")
         if os.path.exists(folder):
             continue
 
@@ -151,14 +152,15 @@ if __name__ == "__main__":
 
     # Model and Data Parameters
     parser.add_argument("--dataset_root", type=str, default="./data/NSD")
-    parser.add_argument("--subject", type=int, default=1)
+    parser.add_argument("--subject", type=int, default=5)
     parser.add_argument("--roi", default="PPA")
     parser.add_argument("--hemisphere", type=str, default="right")
+    parser.add_argument("--subset", type=str, default="wild_animals")
 
     parser.add_argument("--num_frames", type=int, default=6)
     parser.add_argument("--num_images", type=int, default=50)
     parser.add_argument("--t1", type=float, default=0.5)
-    parser.add_argument("--output_dir", type=str, default='./data/part1_outputs')
+    parser.add_argument("--output_dir", type=str, default='./data/part1_4_outputs')
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--device",
