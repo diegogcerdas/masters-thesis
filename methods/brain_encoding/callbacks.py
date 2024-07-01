@@ -81,12 +81,11 @@ class WandbTSNECallback(pl.Callback):
 
 
 class WandbCorrCallback(pl.Callback):
-    def __init__(self, locs, hemisphere, subjdir, clip_linear):
+    def __init__(self, locs, hemisphere, subjdir):
         super().__init__()
         self.locs = locs
         self.hemisphere = hemisphere
         self.subjdir = subjdir
-        self.clip_linear = clip_linear
         self.targets = []
         self.preds = []
 
@@ -145,10 +144,7 @@ class WandbCorrCallback(pl.Callback):
         batch,
         batch_idx: int,
     ) -> None:
-        if self.clip_linear:
-            _, _, target = batch
-        else:
-            _, target, _ = batch
+        _, target, _ = batch
         target = target.squeeze().detach().cpu().numpy()
         pred = outputs.squeeze().detach().cpu().numpy()
         self.targets.append(target)

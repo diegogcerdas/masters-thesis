@@ -75,11 +75,8 @@ class VisionTransformer(nn.Module):
 
 class DINO_ViT_Encoder(nn.Module):
 
-    def __init__(self, output_size):
+    def __init__(self, feature_dim, output_size):
         super().__init__()
-
-        self.backbone = Backbone_dino()
-        feature_dim = self.backbone.num_channels
 
         self.transformers = nn.ModuleList([
             VisionTransformer(
@@ -97,9 +94,7 @@ class DINO_ViT_Encoder(nn.Module):
 
 
     def forward(self, x):
-        with torch.no_grad():
-            features  = self.backbone(x)
-        out = torch.stack([transformer(features[i]) for (i, transformer) in enumerate(self.transformers)], dim=1).to(x.device)
+        out = torch.stack([transformer(x[i]) for (i, transformer) in enumerate(self.transformers)], dim=1).to(x[0].device)
         out = (out * self.aggregator).sum(dim=1)
         return out
     

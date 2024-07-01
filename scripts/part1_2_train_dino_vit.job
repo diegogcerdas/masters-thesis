@@ -5,8 +5,7 @@
 #SBATCH --job-name=MT
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=18
-#SBATCH --time=10:00:00
-#SBATCH --mem=120000M
+#SBATCH --time=15:00:00
 #SBATCH --output=slurm_output_%A.out
 #SBATCH --exclude=gcn45
 
@@ -16,26 +15,13 @@ module load Anaconda3/2022.05
 
 source activate thesis
 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 1 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 1 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 2 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 2 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 3 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 3 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"
-
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 4 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 4 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 5 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 5 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"
-
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 6 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 6 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 7 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 7 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 8 --batch_size 64 --roi "all" --hemisphere "right" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" 
-python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject 8 --batch_size 64 --roi "all" --hemisphere "left" --max_epochs 10 --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"
+for SUBJECT in 1 2 3 4 5 6 7 8
+do
+    for ROI in "OFA" "FFA-1" "FFA-2" "EBA" "FBA-1" "FBA-2" "PPA" "RSC" "OPA" "OWFA" "VWFA-1" "VWFA-2"
+    do
+        for HEMISPHERE in "left" "right"
+        do
+            python run_train_encoder.py --dataset_dir "/gpfs/work5/0/gusr53691/data/NSD/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" --batch_size 64 --max_epochs 5
+        done
+    done
+done

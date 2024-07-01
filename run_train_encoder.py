@@ -16,9 +16,9 @@ from torch.utils import data
 from torchvision import transforms
 
 from datasets.nsd.nsd import NaturalScenesDataset
-from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
 from methods.brain_encoding.dino_vit import DINO_ViT_Encoder
 from methods.brain_encoding.callbacks import WandbCorrCallback
+from methods.brain_encoding.dino_vit import Backbone_dino
 
 
 class EncoderModule(pl.LightningModule):
@@ -26,29 +26,29 @@ class EncoderModule(pl.LightningModule):
         self,
         output_size: int,
         learning_rate: float,
-        clip_linear: bool = False,
     ):
         super(EncoderModule, self).__init__()
         self.save_hyperparameters()
         self.learning_rate = learning_rate
-        self.clip_linear = clip_linear
-        if clip_linear:
-            self.model = nn.Linear(1024, output_size)
-        else:
-            self.model = DINO_ViT_Encoder(output_size)
+        self.backbone = Backbone_dino()
+        self.model = DINO_ViT_Encoder(self.backbone.num_channels, output_size)
+        
+    # omit backbone when saving checkpoint
+    def on_save_checkpoint(self, checkpoint):
+        checkpoint['backbone'] = None
+        return checkpoint
 
     def forward(self, x):
-        return self.model(x)
+        with torch.no_grad():
+            features  = self.backbone(x)
+        return self.model(features)
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.learning_rate)
         return optimizer
 
     def compute_loss(self, batch, mode):
-        if self.clip_linear:
-            _, input, target = batch
-        else:
-            input, target, _ = batch
+        input, target, _ = batch
         pred = self(input)
         loss = F.mse_loss(pred, target)
         self.log_stat(f"{mode}_loss", loss, mode)
@@ -74,22 +74,16 @@ class EncoderModule(pl.LightningModule):
     
 def load_data(cfg):
 
-    if cfg.clip_linear:
-
-        transform = transforms.ToTensor()
-    
-    else:
-
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),
-                transforms.Resize((224, 224)),
-                transforms.Normalize(
-                    mean=[0.485, 0.456, 0.406], 
-                    std=[0.229, 0.224, 0.225]
-                ),
-            ]
-        )
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Resize((224, 224)),
+            transforms.Normalize(
+                mean=[0.485, 0.456, 0.406], 
+                std=[0.229, 0.224, 0.225]
+            ),
+        ]
+    )
 
     train_nsd = NaturalScenesDataset(
         root=cfg.dataset_dir,
@@ -111,20 +105,7 @@ def load_data(cfg):
         return_average=cfg.predict_average,
     )
 
-    if cfg.clip_linear:
-
-        train_set = NSDCLIPFeaturesDataset(
-            nsd=train_nsd,
-            clip_extractor_type='clip_2_0'
-        )
-        val_set = NSDCLIPFeaturesDataset(
-            nsd=val_nsd,
-            clip_extractor_type='clip_2_0'
-        )
-
-    else:
-
-        train_set, val_set = train_nsd, val_nsd
+    train_set, val_set = train_nsd, val_nsd
 
     train_dataloader = data.DataLoader(
         train_set,
@@ -150,7 +131,7 @@ def main(cfg):
 
     roi_str = "_".join(cfg.roi) if isinstance(cfg.roi, list) else cfg.roi
     pred_str = "avg" if cfg.predict_average else "all"
-    folder = "clip_linear" if cfg.clip_linear else "dino_vit"
+    folder = "dino_vit"
     cfg.exp_name = f"{folder}/{cfg.subject:02d}_{roi_str}_{cfg.hemisphere[0]}_{pred_str}_{cfg.seed}"
 
     if cfg.roi == "hvc":
@@ -174,7 +155,6 @@ def main(cfg):
     model = EncoderModule(
         output_size=1 if len(train_nsd.activations.shape) == 1 else train_nsd.activations.shape[1],
         learning_rate=cfg.learning_rate,
-        clip_linear=cfg.clip_linear,
     )
 
     # Initialize callbacks
@@ -189,7 +169,7 @@ def main(cfg):
     
     callbacks = [checkpoint_callback]
     if not cfg.predict_average and cfg.roi == "all":
-        r2_callback = WandbCorrCallback(locs=val_nsd.fs_coords[val_nsd.fs_indices][val_nsd.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_nsd.subj_dir, clip_linear=cfg.clip_linear)
+        r2_callback = WandbCorrCallback(locs=val_nsd.fs_coords[val_nsd.fs_indices][val_nsd.roi_indices], hemisphere=cfg.hemisphere, subjdir=val_nsd.subj_dir)
         callbacks.append(r2_callback)
 
     # Initialize loggers
@@ -224,7 +204,6 @@ if __name__ == "__main__":
     parser.add_argument("--roi", default="hvc")
     parser.add_argument("--hemisphere", type=str, default="right")
     parser.add_argument("--predict_average", action=BooleanOptionalAction, default=False)
-    parser.add_argument("--clip_linear", action=BooleanOptionalAction, default=False)
 
     # Training Parameters
     parser.add_argument("--dataset_dir", type=str, default="./data/NSD")
