@@ -35,7 +35,12 @@ class EncoderModule(pl.LightningModule):
         
     # omit backbone when saving checkpoint
     def on_save_checkpoint(self, checkpoint):
-        checkpoint['backbone'] = None
+        state_dict = dict(checkpoint['state_dict']).copy()
+        keys = list(state_dict.keys())
+        for k in keys:
+            if 'backbone' in k:
+                del state_dict[k]
+        checkpoint['state_dict'] = state_dict
         return checkpoint
 
     def forward(self, x):
