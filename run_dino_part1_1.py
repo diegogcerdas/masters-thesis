@@ -51,7 +51,7 @@ def main(cfg):
             f1 = os.path.join(subj_folder, subfolder, f'dino_vit_preds_{roi}_left.npy')
             f2 = os.path.join(subj_folder, subfolder, f'dino_vit_preds_{roi}_right.npy')
 
-            if os.path.exists(f1) and os.path.exists(f2):
+            if ((model_left is None) or os.path.exists(f1)) and ((model_right is None) or os.path.exists(f2)):
                 continue
 
             img_list = np.array([f for f in os.listdir(os.path.join(subj_folder, subfolder)) if f.endswith('.png')])
