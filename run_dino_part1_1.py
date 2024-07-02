@@ -26,17 +26,24 @@ def main(cfg):
 
     for roi in ['OFA', 'FFA-1', 'FFA-2', 'EBA', 'FBA-1', 'FBA-2', 'OPA', 'PPA', 'RSC', 'OWFA', 'VWFA-1', 'VWFA-2']:
 
-        try:
+        model_left = None
+        model_right = None
 
+        try:
             ckpt_path_left = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{roi}_l_all_0')
             ckpt_path_left = os.path.join(ckpt_path_left, sorted(list(os.listdir(ckpt_path_left)))[-1])
+            model_left = EncoderModule.load_from_checkpoint(ckpt_path_left, strict=False).to(cfg.device).eval()
+        except:
+            None
+            
+        try:
             ckpt_path_right = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{roi}_r_all_0')
             ckpt_path_right = os.path.join(ckpt_path_right, sorted(list(os.listdir(ckpt_path_right)))[-1])
-
-            model_left = EncoderModule.load_from_checkpoint(ckpt_path_left, strict=False).to(cfg.device).eval()
             model_right = EncoderModule.load_from_checkpoint(ckpt_path_right, strict=False).to(cfg.device).eval()
-
         except:
+            None
+
+        if model_left is None and model_right is None:
             continue
 
         for subfolder in tqdm(subfolders, total=len(subfolders)):
@@ -56,16 +63,19 @@ def main(cfg):
             for img in tqdm(img_list):
                 img = Image.open(img).convert("RGB")
                 img = transform_dino(img).to(cfg.device)
-                pred_l = model_left(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy()
-                pred_r = model_right(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy()
-                preds_left.append(pred_l)
-                preds_right.append(pred_r)
+                if model_left is not None:
+                    pred_l = model_left(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy()
+                    preds_left.append(pred_l)
+                if model_right is not None:
+                    pred_r = model_right(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy()
+                    preds_right.append(pred_r)
 
-            preds_left = np.stack(preds_left, axis=0).astype(np.float32).mean(-1)
-            preds_right = np.stack(preds_right, axis=0).astype(np.float32).mean(-1)
-
-            np.save(f1, preds_left)
-            np.save(f2, preds_right)
+            if model_left is not None:
+                preds_left = np.stack(preds_left, axis=0).astype(np.float32).mean(-1)
+                np.save(f1, preds_left)
+            if model_right is not None:
+                preds_right = np.stack(preds_right, axis=0).astype(np.float32).mean(-1)
+                np.save(f2, preds_right)
 
 
     print('##############################')
