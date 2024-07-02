@@ -41,6 +41,9 @@ def main(cfg):
         img_list_order = np.argsort([int(f.replace('.png', '')) for f in img_list])
         img_list = [os.path.join(subj_folder, subfolder, f) for f in img_list[img_list_order]]
 
+        if os.path.exists(img_list[-1].replace('.png', '_gaussian_curvature.npy')):
+            continue
+
         for img_f in tqdm(img_list):
             img = Image.open(img_f).convert("RGB")
 
