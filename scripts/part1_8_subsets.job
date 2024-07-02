@@ -1,0 +1,32 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu
+#SBATCH --gpus-per-node=1
+#SBATCH --job-name=MT
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=18
+#SBATCH --time=10:00:00
+#SBATCH --output=slurm_output_%A.out
+#SBATCH --exclude=gcn45
+
+module purge
+module load 2022
+module load Anaconda3/2022.05
+
+source activate thesis
+
+SUBJECT=5
+
+for ROI in "OFA" "FFA-1" "FFA-2" "EBA" "FBA-1" "FBA-2" "PPA" "RSC" "OPA" "OWFA" "VWFA-1" "VWFA-2"
+do
+    for HEMISPHERE in "left" "right"
+    do  
+        for SUBSET in "wild_animals" "birds" "vehicles" "food" "sports"
+        do
+            python run_gen_part1_4.py --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --subset $SUBSET --output_dir "/gpfs/work5/0/gusr53691/data/part1_4_outputs/"
+            python run_dino_part1_4.py --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --subset $SUBSET --output_dir "/gpfs/work5/0/gusr53691/data/part1_4_outputs/"
+            python run_clip_part1_4.py --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --subset $SUBSET --output_dir "/gpfs/work5/0/gusr53691/data/part1_4_outputs/" --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/"
+            python run_measures_part1_4.py --data_root "/gpfs/work5/0/gusr53691/data/" --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --subset $SUBSET --output_dir "/gpfs/work5/0/gusr53691/data/part1_4_outputs/"
+        done
+    done
+done

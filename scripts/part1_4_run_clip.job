@@ -22,7 +22,7 @@ do
     do
         for HEMISPHERE in "left" "right"
         do
-            python run_clip_part1_1.py --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --output_dir "/gpfs/work5/0/gusr53691/data/part1_outputs/"
+            python run_clip_part1_1.py --subject $SUBJECT --roi $ROI --hemisphere $HEMISPHERE --output_dir "/gpfs/work5/0/gusr53691/data/part1_outputs/" --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/"
         done
     done
 done

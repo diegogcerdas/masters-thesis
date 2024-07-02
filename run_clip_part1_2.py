@@ -22,7 +22,7 @@ def main(cfg):
 
     dataset = NSDCLIPFeaturesDataset(
         nsd = NaturalScenesDataset(
-            root='data/nsd',
+            root=cfg.dataset_root,
             subject=cfg.subject,
             partition='train',
             hemisphere=cfg.hemisphere,
@@ -35,7 +35,7 @@ def main(cfg):
 
     dataset = NSDCLIPFeaturesDataset(
         nsd = NaturalScenesDataset(
-            root='data/nsd',
+            root=cfg.dataset_root,
             subject=cfg.subject,
             partition='train',
             hemisphere=cfg.hemisphere,
@@ -92,6 +92,7 @@ if __name__ == "__main__":
 
     # Model and Data Parameters
     parser.add_argument("--output_dir", type=str, default='./data/part1_2_outputs')
+    parser.add_argument("--dataset_root", type=str, default="./data/NSD")
     parser.add_argument("--subject", type=int, default=5)
     parser.add_argument("--roi1", default="OPA")
     parser.add_argument("--roi2", default="PPA")

@@ -16,7 +16,7 @@ from methods.high_level_attributes.shift_vectors import load_shift_vector
 def main(cfg):
 
     print('##############################')
-    print(f'### Subject {cfg.subject} ROI {cfg.roi} Hemisphere {cfg.hemisphere} ####')
+    print(f'### Subject {cfg.subject} ROI {cfg.roi} Hemisphere {cfg.hemisphere} Subset {cfg.subset} ####')
     print('##############################')
 
     # Since we use stabilityai/stable-diffusion-2-1-unclip, we fix the clip model to ViT-H-14 (laion2b_s32b_b79k)
