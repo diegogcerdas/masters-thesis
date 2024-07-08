@@ -87,7 +87,7 @@ def main(cfg):
             ).images[0]
             images.append(img)
 
-        names = [f'{j:04d}' for j in range(cfg.num_frames*2-1)]
+        names = [f'{j:04d}' for j in range(cfg.num_frames)]
         save_images(images, folder, names)
 
     print('##############################')
