@@ -1,0 +1,24 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu
+#SBATCH --gpus-per-node=1
+#SBATCH --job-name=MT
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=18
+#SBATCH --time=30:00:00
+#SBATCH --output=slurm_output_%A.out
+#SBATCH --exclude=gcn45
+
+module purge
+module load 2022
+module load Anaconda3/2022.05
+
+source activate thesis
+
+for SUBJECT in 1 2 3 4 5 6 7 8
+do
+    for ROI in "OFA" "FFA-1" "FFA-2" "EBA" "FBA-1" "FBA-2" "PPA" "RSC" "OPA" "OWFA" "VWFA-1" "VWFA-2"
+    do
+        python run_all_exp1.py --subject $SUBJECT --roi $ROI --data_root "/gpfs/work5/0/gusr53691/data/" --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/" --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"  --output_dir "/gpfs/work5/0/gusr53691/data/exp1_outputs/"
+    done
+done
