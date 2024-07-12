@@ -249,21 +249,6 @@ def main(cfg):
                     depth = resize(depth)[0].reshape(-1).tolist()
                 ms.extend(depth)
 
-                # compute surface normals
-                img_tensor = torch.tensor(np.array(img_pil.resize((256, 256))).transpose(2, 0, 1)).unsqueeze(0).float().to(cfg.device) / 255
-                with torch.no_grad():
-                    normal = normal_model(img_tensor)
-                    normal = torch.nn.functional.interpolate(
-                        normal,
-                        size=img_pil.size,
-                        mode="bicubic",
-                        align_corners=False,
-                    ).squeeze(1).clamp(min=0, max=1)
-                    normal = normal.squeeze().permute(1,2,0).detach().cpu().numpy()
-                    normal = np.moveaxis(normal, -1, 0)
-                    normal = resize(normal)[0].reshape(-1).tolist()
-                ms.extend(normal)
-
                 # compute gaussian curvatures
                 img_tensor = torch.tensor(np.array(img_pil.resize((256, 256))).transpose(2, 0, 1)).unsqueeze(0).float().to(cfg.device) / 255
                 with torch.no_grad():
@@ -276,12 +261,27 @@ def main(cfg):
                     ).squeeze(1).clamp(min=0, max=1)
                     principal_curvature = principal_curvature.squeeze().permute(1,2,0).detach().cpu().numpy()
                     gaussian_curvature = np.prod(principal_curvature, -1)[None,:,:]
-                    gaussian_curvature = resize(gaussian_curvature)
-                m_ = gaussian_curvature[0].reshape(-1).tolist()
+                    gaussian_curvature = resize(gaussian_curvature)[0].reshape(-1).tolist()
+                ms.extend(gaussian_curvature)
+
+                # compute surface normals
+                img_tensor = torch.tensor(np.array(img_pil.resize((256, 256))).transpose(2, 0, 1)).unsqueeze(0).float().to(cfg.device) / 255
+                with torch.no_grad():
+                    normal = normal_model(img_tensor)
+                    normal = torch.nn.functional.interpolate(
+                        normal,
+                        size=img_pil.size,
+                        mode="bicubic",
+                        align_corners=False,
+                    ).squeeze(1).clamp(min=0, max=1)
+                    normal = normal.squeeze().permute(1,2,0).detach().cpu().numpy()
+                    normal = np.moveaxis(normal, -1, 0)
+                    normal = resize(normal)
+                m_ = normal[0].reshape(-1).tolist()
                 ms.extend(m_)
-                m_ = gaussian_curvature[1].reshape(-1).tolist()
+                m_ = normal[1].reshape(-1).tolist()
                 ms.extend(m_)
-                m_ = gaussian_curvature[2].reshape(-1).tolist()
+                m_ = normal[2].reshape(-1).tolist()
                 ms.extend(m_)
 
                 measures[sub_i, i, emb_i] = ms
