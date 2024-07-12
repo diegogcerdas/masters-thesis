@@ -166,7 +166,7 @@ def main(cfg):
         dists_to_mean = np.abs(activations - mean)
         indices = np.argsort(dists_to_mean)[:(cfg.num_images//5)]
 
-        for i in sorted(indices):
+        for idx_i, i in enumerate(sorted(indices)):
 
             folder = os.path.join(folder_all, f"{subset}_{i:04d}")
 
@@ -211,13 +211,13 @@ def main(cfg):
                 img = transforms.ToTensor()(img_pil).float()
                 feats = clip(img).squeeze(0).detach().cpu().numpy()
                 pred = feats @ shift_vector_numpy
-                clip_feats[sub_i, i, emb_i] = feats
-                clip_preds[sub_i, i, emb_i] = pred
+                clip_feats[sub_i, idx_i, emb_i] = feats
+                clip_preds[sub_i, idx_i, emb_i] = pred
 
                 img = transform_dino(img_pil).to(cfg.device)
                 pred_l = model_left(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
                 pred_r = model_right(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
-                dino_preds[sub_i, i, emb_i] = (pred_l + pred_r) / 2
+                dino_preds[sub_i, idx_i, emb_i] = (pred_l + pred_r) / 2
 
                 ms = []
 
@@ -284,7 +284,7 @@ def main(cfg):
                 m_ = normal[2].reshape(-1).tolist()
                 ms.extend(m_)
 
-                measures[sub_i, i, emb_i] = ms
+                measures[sub_i, idx_i, emb_i] = ms
 
             names = [f'{j:04d}' for j in range(cfg.num_frames*2-1)]
             save_images(images, folder, names)
