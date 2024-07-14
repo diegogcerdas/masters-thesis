@@ -34,7 +34,7 @@ def resize(measure):
 def main(cfg):
 
     print('##############################')
-    print(f'### Subject {cfg.subject} ROI {cfg.roi} ####')
+    print(f'### Subject {cfg.subject} ROI1 {cfg.roi1} ROI2 {cfg.roi2} ####')
     print('##############################')
 
     measurements = \
@@ -66,12 +66,11 @@ def main(cfg):
     normal_model = normal_model.to(cfg.device).eval()
 
     # Folder for all results
-    folder_all = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi}")
+    folder_all = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi1}_{cfg.roi2}")
 
     # Initialize data arrays
     clip_feats = np.empty((5, cfg.num_images//5, cfg.num_frames*2-1, 1024), dtype=np.float32)
-    clip_preds = np.empty((5, cfg.num_images//5, cfg.num_frames*2-1), dtype=np.float32)
-    dino_preds = np.empty((5, cfg.num_images//5, cfg.num_frames*2-1), dtype=np.float32)
+    dino_preds = np.empty((2, 5, cfg.num_images//5, cfg.num_frames*2-1), dtype=np.float32)
     measures = np.empty((5, cfg.num_images//5, cfg.num_frames*2-1, len(measurements)), dtype=np.float32)
 
     # Since we use stabilityai/stable-diffusion-2-1-unclip, we fix the clip model to ViT-H-14 (laion2b_s32b_b79k)
@@ -86,19 +85,28 @@ def main(cfg):
     pipe.safety_checker = None  
 
     # Load DINO-ViT models
-    ckpt_path_left = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{cfg.roi}_l_all_0')
+    ckpt_path_left = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{cfg.roi1}_l_all_0')
     ckpt_path_left = os.path.join(ckpt_path_left, sorted(list(os.listdir(ckpt_path_left)))[-1])
-    model_left = EncoderModule.load_from_checkpoint(ckpt_path_left, strict=False).to(cfg.device).eval()
+    model_left_1 = EncoderModule.load_from_checkpoint(ckpt_path_left, strict=False).to(cfg.device).eval()
 
-    ckpt_path_right = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{cfg.roi}_r_all_0')
+    ckpt_path_right = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{cfg.roi1}_r_all_0')
     ckpt_path_right = os.path.join(ckpt_path_right, sorted(list(os.listdir(ckpt_path_right)))[-1])
-    model_right = EncoderModule.load_from_checkpoint(ckpt_path_right, strict=False).to(cfg.device).eval()
+    model_right_1 = EncoderModule.load_from_checkpoint(ckpt_path_right, strict=False).to(cfg.device).eval()
+    
+    ckpt_path_left = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{cfg.roi2}_l_all_0')
+    ckpt_path_left = os.path.join(ckpt_path_left, sorted(list(os.listdir(ckpt_path_left)))[-1])
+    model_left_2 = EncoderModule.load_from_checkpoint(ckpt_path_left, strict=False).to(cfg.device).eval()
+
+    ckpt_path_right = os.path.join(cfg.ckpt_dir, 'dino_vit', f'0{cfg.subject}_{cfg.roi2}_r_all_0')
+    ckpt_path_right = os.path.join(ckpt_path_right, sorted(list(os.listdir(ckpt_path_right)))[-1])
+    model_right_2 = EncoderModule.load_from_checkpoint(ckpt_path_right, strict=False).to(cfg.device).eval()
 
     f = os.path.join(os.path.join(cfg.dataset_root, f"subj{cfg.subject:02d}"), 'nsd_idx2captions.json')
     with open(f, 'r') as file:
         nsd_idx2captions = json.load(file)
 
     # Load shift vector from rest of subjects
+    # ROI 1
     subjects = [1,2,3,4,5,6,7,8]
     subjects.remove(cfg.subject)
     shift_vectors = []
@@ -110,7 +118,7 @@ def main(cfg):
                     subject=s,
                     partition="train",
                     hemisphere='left',
-                    roi=cfg.roi,
+                    roi=cfg.roi1,
                 ),
                 clip_extractor_type='clip_2_0'
             )
@@ -121,7 +129,7 @@ def main(cfg):
                     subject=s,
                     partition="train",
                     hemisphere='right',
-                    roi=cfg.roi,
+                    roi=cfg.roi1,
                 ),
                 clip_extractor_type='clip_2_0'
             )
@@ -132,39 +140,63 @@ def main(cfg):
             continue
     shift_vectors = np.stack(shift_vectors, axis=0)
     shift_vector = shift_vectors.mean(axis=0)
+    shift_vector1 = shift_vector / np.linalg.norm(shift_vector)
+    # ROI 2
+    subjects = [1,2,3,4,5,6,7,8]
+    subjects.remove(cfg.subject)
+    shift_vectors = []
+    for s in subjects:
+        try:
+            dataset = NSDCLIPFeaturesDataset(
+                nsd=NaturalScenesDataset(
+                    root=cfg.dataset_root,
+                    subject=s,
+                    partition="train",
+                    hemisphere='left',
+                    roi=cfg.roi2,
+                ),
+                clip_extractor_type='clip_2_0'
+            )
+            shift_vector_left = load_shift_vector(dataset)
+            dataset = NSDCLIPFeaturesDataset(
+                nsd=NaturalScenesDataset(
+                    root=cfg.dataset_root,
+                    subject=s,
+                    partition="train",
+                    hemisphere='right',
+                    roi=cfg.roi2,
+                ),
+                clip_extractor_type='clip_2_0'
+            )
+            shift_vector_right = load_shift_vector(dataset)
+            shift_vector = (shift_vector_left + shift_vector_right) / 2
+            shift_vectors.append(shift_vector)
+        except:
+            continue
+    shift_vectors = np.stack(shift_vectors, axis=0)
+    shift_vector = shift_vectors.mean(axis=0)
+    shift_vector2 = shift_vector / np.linalg.norm(shift_vector)
+
+    shift_vector = shift_vector1 - shift_vector2
     shift_vector_numpy = shift_vector / np.linalg.norm(shift_vector)
     shift_vector = torch.from_numpy(shift_vector_numpy).to(cfg.device, dtype=dtype)
 
     for sub_i, subset in enumerate(['wild_animals', 'birds', 'vehicles', 'food', 'sports']):
 
-        # Load validation dataset (left)
+        # Load validation dataset
         nsd = NaturalScenesDataset(
             root=cfg.dataset_root,
             subject=cfg.subject,
             partition="test",
-            hemisphere='left',
-            roi=cfg.roi,
-            return_average=True,
-            subset=subset
+            subset=subset,
         )
-        activations_left = nsd.activations.numpy()
-        # Load validation dataset (right)
-        nsd = NaturalScenesDataset(
-            root=cfg.dataset_root,
-            subject=cfg.subject,
-            partition="test",
-            hemisphere='right',
-            roi=cfg.roi,
-            return_average=True,
-            subset=subset
-        )
-        activations_right = nsd.activations.numpy()
-        activations = np.mean([activations_left, activations_right], axis=0)
+        f = os.path.join(nsd.subj_dir, 'nsd_idx2captions.json')
+        with open(f, 'r') as file:
+            nsd_idx2captions = json.load(file)
 
         # Select subset
-        mean = activations.mean()
-        dists_to_mean = np.abs(activations - mean)
-        indices = np.argsort(dists_to_mean)[:(cfg.num_images//5)]
+        rng = np.random.default_rng(cfg.seed)
+        indices = rng.choice(range(len(nsd)), len(nsd), replace=False)[:(cfg.num_images//5)]
 
         for idx_i, i in enumerate(sorted(indices)):
 
@@ -212,12 +244,16 @@ def main(cfg):
                 feats = clip(img).squeeze(0).detach().cpu().numpy()
                 pred = feats @ shift_vector_numpy
                 clip_feats[sub_i, idx_i, emb_i] = feats
-                clip_preds[sub_i, idx_i, emb_i] = pred
 
                 img = transform_dino(img_pil).to(cfg.device)
-                pred_l = model_left(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
-                pred_r = model_right(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
-                dino_preds[sub_i, idx_i, emb_i] = (pred_l + pred_r) / 2
+
+                pred_l = model_left_1(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
+                pred_r = model_right_1(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
+                dino_preds[0, sub_i, idx_i, emb_i] = (pred_l + pred_r) / 2
+
+                pred_l = model_left_2(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
+                pred_r = model_right_2(img.unsqueeze(0)).squeeze(0).detach().cpu().numpy().mean()
+                dino_preds[1, sub_i, idx_i, emb_i] = (pred_l + pred_r) / 2
 
                 ms = []
 
@@ -290,7 +326,6 @@ def main(cfg):
             save_images(images, folder, names)
 
     np.save(os.path.join(folder_all, 'clip_feats.npy'), clip_feats.astype(np.float32))
-    np.save(os.path.join(folder_all, 'clip_preds.npy'), clip_preds.astype(np.float32))
     np.save(os.path.join(folder_all, 'dino_preds.npy'), dino_preds.astype(np.float32))
     np.save(os.path.join(folder_all, 'measures.npy'), measures.astype(np.float32))
 
@@ -327,12 +362,13 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_root", type=str, default="./data/NSD")
     parser.add_argument("--ckpt_dir", type=str, default="./data/checkpoints")
     parser.add_argument("--subject", type=int, default=1)
-    parser.add_argument("--roi", default="PPA")
+    parser.add_argument("--roi1", default="OPA")
+    parser.add_argument("--roi2", default="PPA")
 
     parser.add_argument("--num_frames", type=int, default=4)
     parser.add_argument("--num_images", type=int, default=50)
     parser.add_argument("--t1", type=float, default=0.5)
-    parser.add_argument("--output_dir", type=str, default='./data/exp1_outputs')
+    parser.add_argument("--output_dir", type=str, default='./data/exp2_outputs')
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument(
         "--device",
