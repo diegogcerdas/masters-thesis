@@ -32,6 +32,7 @@ def main(cfg):
     model2 = EncoderModule.load_from_checkpoint(ckpt_path2, strict=False).to(cfg.device).eval()
 
     subj_folder = os.path.join(cfg.output_dir, f'{cfg.subject}_{cfg.roi}')
+    os.makedirs(subj_folder, exist_ok=True)
     f1 = os.path.join(subj_folder, 'dino_vit_preds_left.npy')
     f2 = os.path.join(subj_folder, 'dino_vit_preds_right.npy')
 
