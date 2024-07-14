@@ -203,7 +203,7 @@ def main(cfg):
             folder = os.path.join(folder_all, f"{subset}_{i:04d}")
 
             # Load source image and perform DDIM inversion
-            source_img, _, nsd_idx = nsd[i]
+            source_img, nsd_idx = nsd[i]
             source_img = source_img.resize(resolution)
             prompt = nsd_idx2captions[str(nsd_idx)]
             inverted_latents, _ = ddim_inversion(
