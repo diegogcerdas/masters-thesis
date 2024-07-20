@@ -6,17 +6,55 @@ import pandas as pd
 import torch
 from sklearn.metrics import pairwise_distances
 from tqdm import tqdm
+from datasets.nsd.nsd import NaturalScenesDataset
+from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
 
 
-def load_shift_vector(dataset, lmbda=1e+3):
-    assert dataset.nsd.partition == 'train'
-    assert dataset.nsd.return_average == False
-    X = dataset.features
-    Y = dataset.nsd.activations.numpy()
-    W = X.T @ X + lmbda * np.eye(X.shape[1])
-    W = (np.linalg.inv(W) @ X.T @ Y).T
-    shift_vector = W.mean(0)
+def load_shift_vector(subject, roi, dataset_root, lmbda=10):
+
+    subjects = [1,2,3,4,5,6,7,8]
+    subjects.remove(subject)
+    shift_vectors = []
+
+    for s in subjects:
+        try:
+            dataset_train_left = NSDCLIPFeaturesDataset(
+                nsd=NaturalScenesDataset(
+                    root=dataset_root,
+                    subject=s,
+                    partition="train",
+                    hemisphere='left',
+                    roi=roi,
+                    return_average=True
+                ),
+                clip_extractor_type='clip_2_0'
+            )
+            dataset_train_right = NSDCLIPFeaturesDataset(
+                nsd=NaturalScenesDataset(
+                    root=dataset_root,
+                    subject=s,
+                    partition="train",
+                    hemisphere='right',
+                    roi=roi,
+                    return_average=True
+                ),
+                clip_extractor_type='clip_2_0'
+            )
+        except:
+            continue
+
+        Y_train = (dataset_train_left.nsd.activations.numpy() + dataset_train_right.nsd.activations.numpy() ) / 2
+        X_train = dataset_train_right.features / np.linalg.norm(dataset_train_right.features, axis=1, keepdims=True)
+    
+        W = X_train.T @ X_train + lmbda * np.eye(X_train.shape[1])
+        W = (np.linalg.inv(W) @ X_train.T @ Y_train).T
+        W_orig = W / np.linalg.norm(W)
+        shift_vectors.append(W_orig)
+    
+    shift_vectors = np.stack(shift_vectors, axis=0)
+    shift_vector = shift_vectors.mean(axis=0)
     shift_vector = shift_vector / np.linalg.norm(shift_vector)
+
     return shift_vector
 
 def order_by_shift_vector(shift_vector, features, return_sims=False):

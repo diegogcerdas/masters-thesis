@@ -29,6 +29,10 @@ ROI1="OPA"
 ROI2="PPA"
 python run_all_exp2.py --subject $SUBJECT --roi1 $ROI1 --roi2 $ROI2 --data_root "/gpfs/work5/0/gusr53691/data/" --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/" --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"  --output_dir "/gpfs/work5/0/gusr53691/data/exp2_outputs/"
 
+ROI1="RSC"
+ROI2="PPA"
+python run_all_exp2.py --subject $SUBJECT --roi1 $ROI1 --roi2 $ROI2 --data_root "/gpfs/work5/0/gusr53691/data/" --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/" --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"  --output_dir "/gpfs/work5/0/gusr53691/data/exp2_outputs/"
+
 ROI1="OWFA"
 ROI2="VWFA-1"
 python run_all_exp2.py --subject $SUBJECT --roi1 $ROI1 --roi2 $ROI2 --data_root "/gpfs/work5/0/gusr53691/data/" --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/" --ckpt_dir "/gpfs/work5/0/gusr53691/data/checkpoints/"  --output_dir "/gpfs/work5/0/gusr53691/data/exp2_outputs/"

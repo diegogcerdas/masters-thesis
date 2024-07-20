@@ -46,6 +46,10 @@ subsets = {
         'all_positives': [['bird']],
         'negatives': ['person', 'food', 'vehicle', 'wild_animal', 'cat', 'dog']
     },
+    'furniture': {
+        'all_positives': [['furniture']],
+        'negatives': ['person', 'food', 'vehicle', 'animal', 'dining', 'umbrella']
+    },
 }
 
 
@@ -288,7 +292,7 @@ def build_roi_inverted_index(dataset_root: str, subject: int, hemisphere: str):
     )
 
 def get_subset_indices(nsd, subset):
-    assert subset in ['wild_animals', 'birds', 'vehicles', 'sports', 'food']
+    assert subset in ['wild_animals', 'birds', 'vehicles', 'sports', 'food', 'furniture']
     f = os.path.join(nsd.subj_dir, 'category2nsd_idxs.json')
     category2nsd_idx = json.load(open(f))
     f = os.path.join(nsd.subj_dir, 'nsd_idx2categories.json')

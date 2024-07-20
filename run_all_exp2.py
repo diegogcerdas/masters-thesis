@@ -8,7 +8,6 @@ from torchvision import transforms
 from methods.ddim_inversion import ddim_inversion
 from methods.img_utils import save_images
 from datasets.nsd.nsd import NaturalScenesDataset
-from datasets.nsd.nsd_clip import NSDCLIPFeaturesDataset
 
 from methods.high_level_attributes.shift_vectors import load_shift_vector
 from methods.high_level_attributes.clip_extractor import create_clip_extractor
@@ -48,6 +47,8 @@ def main(cfg):
     [f'surface_normal_2_{i+1}' for i in range(100)] + \
     [f'surface_normal_3_{i+1}' for i in range(100)]
 
+    subsets = ['wild_animals', 'birds', 'vehicles', 'food', 'sports', 'furniture']
+
     transform_dino = transforms.Compose(
         [
             transforms.ToTensor(),
@@ -69,9 +70,9 @@ def main(cfg):
     folder_all = os.path.join(cfg.output_dir, f"{cfg.subject}_{cfg.roi1}_{cfg.roi2}")
 
     # Initialize data arrays
-    clip_feats = np.empty((5, cfg.num_images//5, cfg.num_frames*2-1, 1024), dtype=np.float32)
-    dino_preds = np.empty((2, 5, cfg.num_images//5, cfg.num_frames*2-1), dtype=np.float32)
-    measures = np.empty((5, cfg.num_images//5, cfg.num_frames*2-1, len(measurements)), dtype=np.float32)
+    clip_feats = np.empty((len(subsets), cfg.num_images, cfg.num_frames*2-1, 1024), dtype=np.float32)
+    dino_preds = np.empty((2, len(subsets), cfg.num_images, cfg.num_frames*2-1), dtype=np.float32)
+    measures = np.empty((len(subsets), cfg.num_images, cfg.num_frames*2-1, len(measurements)), dtype=np.float32)
 
     # Since we use stabilityai/stable-diffusion-2-1-unclip, we fix the clip model to ViT-H-14 (laion2b_s32b_b79k)
     pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1-unclip"
@@ -107,81 +108,15 @@ def main(cfg):
 
     # Load shift vector from rest of subjects
     # ROI 1
-    subjects = [1,2,3,4,5,6,7,8]
-    subjects.remove(cfg.subject)
-    shift_vectors = []
-    for s in subjects:
-        try:
-            dataset = NSDCLIPFeaturesDataset(
-                nsd=NaturalScenesDataset(
-                    root=cfg.dataset_root,
-                    subject=s,
-                    partition="train",
-                    hemisphere='left',
-                    roi=cfg.roi1,
-                ),
-                clip_extractor_type='clip_2_0'
-            )
-            shift_vector_left = load_shift_vector(dataset)
-            dataset = NSDCLIPFeaturesDataset(
-                nsd=NaturalScenesDataset(
-                    root=cfg.dataset_root,
-                    subject=s,
-                    partition="train",
-                    hemisphere='right',
-                    roi=cfg.roi1,
-                ),
-                clip_extractor_type='clip_2_0'
-            )
-            shift_vector_right = load_shift_vector(dataset)
-            shift_vector = (shift_vector_left + shift_vector_right) / 2
-            shift_vectors.append(shift_vector)
-        except:
-            continue
-    shift_vectors = np.stack(shift_vectors, axis=0)
-    shift_vector = shift_vectors.mean(axis=0)
-    shift_vector1 = shift_vector / np.linalg.norm(shift_vector)
+    shift_vector1 = load_shift_vector(cfg.subject, cfg.roi1, cfg.dataset_root)
     # ROI 2
-    subjects = [1,2,3,4,5,6,7,8]
-    subjects.remove(cfg.subject)
-    shift_vectors = []
-    for s in subjects:
-        try:
-            dataset = NSDCLIPFeaturesDataset(
-                nsd=NaturalScenesDataset(
-                    root=cfg.dataset_root,
-                    subject=s,
-                    partition="train",
-                    hemisphere='left',
-                    roi=cfg.roi2,
-                ),
-                clip_extractor_type='clip_2_0'
-            )
-            shift_vector_left = load_shift_vector(dataset)
-            dataset = NSDCLIPFeaturesDataset(
-                nsd=NaturalScenesDataset(
-                    root=cfg.dataset_root,
-                    subject=s,
-                    partition="train",
-                    hemisphere='right',
-                    roi=cfg.roi2,
-                ),
-                clip_extractor_type='clip_2_0'
-            )
-            shift_vector_right = load_shift_vector(dataset)
-            shift_vector = (shift_vector_left + shift_vector_right) / 2
-            shift_vectors.append(shift_vector)
-        except:
-            continue
-    shift_vectors = np.stack(shift_vectors, axis=0)
-    shift_vector = shift_vectors.mean(axis=0)
-    shift_vector2 = shift_vector / np.linalg.norm(shift_vector)
+    shift_vector2 = load_shift_vector(cfg.subject, cfg.roi2, cfg.dataset_root)
 
     shift_vector = shift_vector1 - shift_vector2
     shift_vector_numpy = shift_vector / np.linalg.norm(shift_vector)
     shift_vector = torch.from_numpy(shift_vector_numpy).to(cfg.device, dtype=dtype)
 
-    for sub_i, subset in enumerate(['wild_animals', 'birds', 'vehicles', 'food', 'sports']):
+    for sub_i, subset in enumerate(['wild_animals', 'birds', 'vehicles', 'food', 'sports', 'furniture']):
 
         # Load validation dataset
         nsd = NaturalScenesDataset(
@@ -196,7 +131,7 @@ def main(cfg):
 
         # Select subset
         rng = np.random.default_rng(cfg.seed)
-        indices = rng.choice(range(len(nsd)), len(nsd), replace=False)[:(cfg.num_images//5)]
+        indices = rng.choice(range(len(nsd)), len(nsd), replace=False)[:cfg.num_images]
 
         for idx_i, i in enumerate(sorted(indices)):
 
@@ -227,6 +162,8 @@ def main(cfg):
             embs2 = slerp(source_img_embeds, endpoint2, cfg.num_frames, t1=cfg.t1).half().to(cfg.device).flip(0)[:-1]
             embs = torch.cat([embs2, embs1])
 
+            pipe_seed = np.random.randint(0, 1e+9)
+
             images = []
             for emb_i, emb in enumerate(embs):
 
@@ -234,7 +171,7 @@ def main(cfg):
                 img_pil = pipe(
                     latents=inverted_latents,
                     prompt=prompt,
-                    generator=torch.Generator(device=cfg.device).manual_seed(cfg.seed),
+                    generator=torch.Generator(device=cfg.device).manual_seed(pipe_seed),
                     image_embeds=emb,
                     noise_level=0,
                 ).images[0]
@@ -365,8 +302,8 @@ if __name__ == "__main__":
     parser.add_argument("--roi1", default="OPA")
     parser.add_argument("--roi2", default="PPA")
 
-    parser.add_argument("--num_frames", type=int, default=4)
-    parser.add_argument("--num_images", type=int, default=50)
+    parser.add_argument("--num_frames", type=int, default=5)
+    parser.add_argument("--num_images", type=int, default=10)
     parser.add_argument("--t1", type=float, default=0.5)
     parser.add_argument("--output_dir", type=str, default='./data/exp2_outputs')
     parser.add_argument("--seed", type=int, default=0)
