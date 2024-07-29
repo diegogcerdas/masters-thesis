@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu
+#SBATCH --gpus-per-node=1
+#SBATCH --job-name=MT
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=18
+#SBATCH --time=01:00:00
+#SBATCH --output=slurm_output_%A.out
+#SBATCH --exclude=gcn45
+
+module purge
+module load 2022
+module load Anaconda3/2022.05
+
+source activate thesis
+
+for SUBJECT in 1 2 3 4 5 6 7 8
+do
+    python run_preview.py --subject $SUBJECT --dataset_root "/gpfs/work5/0/gusr53691/data/NSD/"  --output_dir "/gpfs/work5/0/gusr53691/data/preview/"
+done

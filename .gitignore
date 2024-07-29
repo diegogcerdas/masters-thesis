@@ -2,6 +2,8 @@ data/
 __pycache__/
 wandb/
 test*.ipynb
-*.job
+# *.job
 *.out
 *.npy
+*.png
+*.csv
