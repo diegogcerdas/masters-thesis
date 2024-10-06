@@ -5,7 +5,7 @@ from datasets.nsd.utils.coco_utils import (build_coco_category_search,
                                            download_coco_annotation_file,
                                            save_segmentation_masks, save_captions)
 from datasets.nsd.utils.nsd_utils import build_roi_inverted_index
-from methods.high_level_attributes.shift_vectors import (
+from methods.high_level_attributes.modulation_vectors import (
     save_for_attribute_pairs, save_for_nouns)
 from methods.low_level_attributes.image_measures import *
 
@@ -48,11 +48,11 @@ for subject in [1,2,3,4,5,6,7,8]:
 # 7. Compute and save high-level attribute pair shift vectors
 save_for_attribute_pairs(
     os.path.join(data_root, "attribute_pairs.tsv"),
-    os.path.join(data_root, "shift_vectors/attribute_pairs")
+    os.path.join(data_root, "modulation_vectors/attribute_pairs")
 )
 
 # 8. Compute and save high-level noun shift vectors
 save_for_nouns(
     os.path.join(data_root, "laion_nouns.txt"),
-    os.path.join(data_root, "shift_vectors/nouns")
+    os.path.join(data_root, "modulation_vectors/nouns")
 )
