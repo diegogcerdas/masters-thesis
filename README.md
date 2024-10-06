@@ -8,8 +8,9 @@ MSc Artificial Intelligence - University of Amsterdam
 - *Second Reader*: MSc. Christina Sartzetaki<sup>1</sup>
 
 <sup>1</sup> Video & Image Sense Lab\
-<sup>2</sup> CVAI Lab, Goethe University Frankfurt
+<sup>2</sup> CVAI Lab, Goethe University Frankfurtv
 
+![image](data/preview.svg)
 
 ## Setup
 
